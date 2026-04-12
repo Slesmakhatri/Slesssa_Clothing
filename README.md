@@ -45,3 +45,4 @@ npm run dev
 - Backend requires a reachable MongoDB instance via `MONGODB_URI`
 - Set `DJANGO_DEBUG=False` and production `DJANGO_ALLOWED_HOSTS`
 "# Slessaa-Clothing" 
+"# Slessaa-Clothing" 
