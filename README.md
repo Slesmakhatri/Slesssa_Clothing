@@ -46,3 +46,4 @@ npm run dev
 - Set `DJANGO_DEBUG=False` and production `DJANGO_ALLOWED_HOSTS`
 "# Slessaa-Clothing" 
 "# Slessaa-Clothing" 
+"# Slessaa-Clothing" 
