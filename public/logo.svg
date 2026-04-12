@@ -1,0 +1,20 @@
+<svg width="920" height="320" viewBox="0 0 920 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="920" height="320" fill="transparent"/>
+  <text x="44" y="148" fill="#243B53" font-family="Georgia, 'Times New Roman', serif" font-size="128" font-style="italic">
+    Slessaa
+  </text>
+  <text x="240" y="218" fill="#C97B63" font-family="Georgia, 'Times New Roman', serif" font-size="34" letter-spacing="12">
+    CLOTHING
+  </text>
+  <path d="M172 244C228 226 284 226 340 244C396 262 452 262 508 244C564 226 620 226 676 244" stroke="#C97B63" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M196 252C250 234 304 234 358 252C412 270 466 270 520 252C574 234 628 234 682 252" stroke="#D9A17D" stroke-width="1.8" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="430" cy="252" r="12" fill="#EA8685"/>
+  <circle cx="430" cy="252" r="4.5" fill="#FFF8F2"/>
+  <path d="M430 236C434 244 442 248 450 252C442 256 434 260 430 268C426 260 418 256 410 252C418 248 426 244 430 236Z" fill="#F6E4D8" opacity="0.9"/>
+  <path d="M360 238C350 234 344 228 340 220C350 224 358 228 364 236" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M370 246C360 244 352 238 346 232" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M500 238C510 234 516 228 520 220C510 224 502 228 496 236" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M490 246C500 244 508 238 514 232" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M644 230C658 226 668 218 674 206C664 212 654 218 646 228" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M628 244C640 244 652 240 662 234" stroke="#B98A5F" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,19 @@
+<svg width="900" height="1200" viewBox="0 0 900 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="1200" fill="#FDF2EC"/>
+  <rect x="72" y="72" width="756" height="1056" rx="44" fill="url(#paint0_linear)"/>
+  <rect x="110" y="120" width="680" height="960" rx="36" fill="#FFF9F6" stroke="#F1D1C0" stroke-width="2"/>
+  <path d="M326 432C326 361.307 383.307 304 454 304V304C524.693 304 582 361.307 582 432V488H326V432Z" fill="#F8C291"/>
+  <path d="M300 560C300 531.281 323.281 508 352 508H556C584.719 508 608 531.281 608 560V782C608 835.019 565.019 878 512 878H396C343.981 878 300 835.019 300 782V560Z" fill="#3C6382"/>
+  <rect x="404" y="488" width="100" height="94" rx="24" fill="#EA8685"/>
+  <path d="M340 930C398.286 900.911 438.857 886.366 450 886.366C461.143 886.366 501.714 900.911 560 930" stroke="#C44569" stroke-width="10" stroke-linecap="round"/>
+  <text x="450" y="182" text-anchor="middle" fill="#3C6382" font-family="Georgia, 'Times New Roman', serif" font-size="56" letter-spacing="8">SLESSAA</text>
+  <text x="450" y="230" text-anchor="middle" fill="#C44569" font-family="Arial, Helvetica, sans-serif" font-size="20" letter-spacing="6">FASHION MARKETPLACE</text>
+  <text x="450" y="1014" text-anchor="middle" fill="#3C6382" font-family="Arial, Helvetica, sans-serif" font-size="28" letter-spacing="2">IMAGE COMING SOON</text>
+  <text x="450" y="1050" text-anchor="middle" fill="#6C7E8A" font-family="Arial, Helvetica, sans-serif" font-size="20">Premium product preview unavailable</text>
+  <defs>
+    <linearGradient id="paint0_linear" x1="450" y1="72" x2="450" y2="1128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8F2"/>
+      <stop offset="1" stop-color="#FCE4D6"/>
+    </linearGradient>
+  </defs>
+</svg>

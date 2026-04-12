@@ -1,0 +1,18 @@
+{
+  "name": "Slessaa Clothing",
+  "short_name": "Slessaa",
+  "description": "AI-powered fashion ecommerce and tailoring platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fcfaf8",
+  "theme_color": "#8c4c3c",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

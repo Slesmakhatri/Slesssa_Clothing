@@ -1,0 +1,18 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="320" rx="24" fill="transparent"/>
+  <rect x="84" y="70" width="126" height="126" rx="22" fill="#3C6382"/>
+  <text x="116" y="152" fill="#FFF8F2" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700">SC</text>
+  <text x="256" y="136" fill="#3C6382" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="3">SLESSAA</text>
+  <text x="258" y="188" fill="#C44569" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="500" letter-spacing="12">CLOTHING</text>
+  <rect x="258" y="214" width="286" height="10" rx="5" fill="url(#paint0_linear_modern)"/>
+  <circle cx="570" cy="219" r="18" fill="#EA8685" opacity="0.22"/>
+  <path d="M560 219H580" stroke="#C44569" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M570 209V229" stroke="#C44569" stroke-width="2.5" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="paint0_linear_modern" x1="258" y1="219" x2="544" y2="219" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8C291"/>
+      <stop offset="0.55" stop-color="#EA8685"/>
+      <stop offset="1" stop-color="#C44569"/>
+    </linearGradient>
+  </defs>
+</svg>

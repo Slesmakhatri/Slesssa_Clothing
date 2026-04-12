@@ -1,0 +1,10 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="48" y="44" width="864" height="232" rx="28" fill="#3C6382"/>
+  <rect x="68" y="64" width="824" height="192" rx="20" stroke="#F8C291" stroke-width="2" opacity="0.8"/>
+  <text x="114" y="150" fill="#FFF8F2" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="800" letter-spacing="4">SLESSAA</text>
+  <text x="116" y="206" fill="#F8C291" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="600" letter-spacing="14">CLOTHING</text>
+  <path d="M664 104H814" stroke="#EA8685" stroke-width="5" stroke-linecap="round"/>
+  <path d="M664 218H814" stroke="#F8C291" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="738" cy="160" r="46" fill="#C44569"/>
+  <text x="713" y="177" fill="#FFF8F2" font-family="Georgia, 'Times New Roman', serif" font-size="46" font-style="italic">S</text>
+</svg>

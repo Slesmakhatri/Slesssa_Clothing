@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slessaa Offline</title>
+    <meta name="theme-color" content="#8c4c3c" />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font-family: system-ui, sans-serif;
+        color: #1f2833;
+        background:
+          radial-gradient(circle at top left, rgba(188, 122, 79, 0.16), transparent 24%),
+          linear-gradient(180deg, #fcfaf8 0%, #f7f2ec 55%, #fffcfa 100%);
+      }
+
+      .offline-card {
+        width: min(100%, 420px);
+        padding: 28px;
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(31, 40, 51, 0.08);
+        box-shadow: 0 24px 60px rgba(31, 40, 51, 0.12);
+      }
+
+      img {
+        width: 128px;
+        height: auto;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 2rem;
+      }
+
+      p {
+        margin: 0 0 18px;
+        line-height: 1.6;
+        color: rgba(31, 40, 51, 0.74);
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 18px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #8c4c3c, #bc7a4f);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="offline-card">
+      <img src="/logo.svg" alt="Slessaa Clothing" />
+      <h1>You are offline</h1>
+      <p>The app shell is installed, but live catalog, tailoring, and payment data need a connection. Reconnect and try again.</p>
+      <a href="/">Return Home</a>
+    </div>
+  </body>
+  </html>
