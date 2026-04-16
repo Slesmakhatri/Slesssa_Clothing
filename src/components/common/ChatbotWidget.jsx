@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { sendChatbotMessage } from '../../services/api';
+import { storefrontProducts } from '../../data/storefront';
 import { getProductImage, getProductPrice } from '../../services/productUtils';
 
 const quickPrompts = [
@@ -15,8 +16,87 @@ function formatFilters(filters = {}) {
   return [filters.category, filters.color, filters.occasion, filters.gender].filter(Boolean).join(' | ');
 }
 
+function uniqueActions(actions = []) {
+  return [...new Set(actions.map((action) => String(action || '').trim()).filter(Boolean))];
+}
+
+function productMatchesPrompt(product, prompt) {
+  const lowered = prompt.toLowerCase();
+  const productText = [
+    product.name,
+    product.title,
+    product.category,
+    product.audience,
+    product.description,
+    product.badge,
+    ...(product.tags || []),
+    ...(product.colors || [])
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return lowered.split(/\s+/).filter((term) => term.length > 2).some((term) => productText.includes(term));
+}
+
+function buildLocalFallbackReply(message, error) {
+  const lowered = message.toLowerCase();
+  const products = storefrontProducts.filter((product) => productMatchesPrompt(product, message)).slice(0, 4);
+  const unavailableHint = error?.status >= 500
+    ? 'Live assistant is temporarily unavailable, so I am using the local catalog.'
+    : 'I am using the local catalog because live assistant data was not available.';
+
+  if (lowered.includes('track') && lowered.includes('order')) {
+    return {
+      text: `${unavailableHint} You can still open order tracking and enter your order number there.`,
+      products: [],
+      filters: {},
+      vendors: [],
+      actions: ['Open order tracking']
+    };
+  }
+
+  if (lowered.includes('custom') || lowered.includes('tailor') || lowered.includes('measure')) {
+    return {
+      text: `${unavailableHint} Start on the tailoring page, describe your design, estimate measurements, then select a recommended tailor.`,
+      products,
+      filters: {},
+      vendors: [],
+      actions: ['Open tailoring page', 'Generate design suggestion']
+    };
+  }
+
+  if (lowered.includes('vendor') || lowered.includes('seller') || lowered.includes('shop')) {
+    return {
+      text: `${unavailableHint} For now, open a product or contact support so your message can be routed to the right vendor.`,
+      products,
+      filters: {},
+      vendors: [],
+      actions: ['Browse best sellers', 'Contact support']
+    };
+  }
+
+  if (lowered.includes('design') || lowered.includes('style') || lowered.includes('wedding') || lowered.includes('kurta')) {
+    return {
+      text: `${unavailableHint} Tell the tailoring page your garment, occasion, color mood, fit, and neckline preference to generate a structured design suggestion.`,
+      products,
+      filters: {},
+      vendors: [],
+      actions: ['Open tailoring page', 'Recommend festive products']
+    };
+  }
+
+  return {
+    text: `${unavailableHint} Here are local catalog matches while the live assistant recovers.`,
+    products,
+    filters: {},
+    vendors: [],
+    actions: ['Help me customize a product', 'Browse best sellers']
+  };
+}
+
 function ChatbotWidget() {
   const navigate = useNavigate();
+  const bodyRef = useRef(null);
   const initialMessages = useMemo(
     () => [
       {
@@ -26,7 +106,7 @@ function ChatbotWidget() {
         products: [],
         filters: {},
         vendors: [],
-        actions: quickPrompts
+        actions: []
       }
     ],
     []
@@ -35,6 +115,11 @@ function ChatbotWidget() {
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!open || !bodyRef.current) return;
+    bodyRef.current.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, open, sending]);
 
   async function handleSend(nextDraft) {
     const message = String(nextDraft ?? draft).trim();
@@ -62,17 +147,18 @@ function ChatbotWidget() {
       ]);
     } catch (error) {
       const fallbackMessage =
-        error?.payload?.detail || 'I could not fetch live recommendations right now. Please try again in a moment.';
+        error?.payload?.detail || 'Live assistant data is temporarily unavailable.';
+      const fallback = buildLocalFallbackReply(message, error);
       setMessages((current) => [
         ...current,
         {
           id: `bot-${Date.now()}`,
           sender: 'bot',
-          text: fallbackMessage,
-          products: [],
-          filters: {},
-          vendors: [],
-          actions: []
+          text: fallback.text || fallbackMessage,
+          products: fallback.products || [],
+          filters: fallback.filters || {},
+          vendors: fallback.vendors || [],
+          actions: fallback.actions || []
         }
       ]);
     } finally {
@@ -90,7 +176,17 @@ function ChatbotWidget() {
       navigate('/login');
       return;
     }
-    if (lowered.includes('tailoring') || lowered.includes('measure') || lowered.includes('tailor') || lowered.includes('design suggestion')) {
+    if (lowered.includes('tracking') || (lowered.includes('track') && lowered.includes('order'))) {
+      setOpen(false);
+      navigate('/track-order');
+      return;
+    }
+    if (lowered.includes('best seller')) {
+      setOpen(false);
+      navigate('/shop?curated=Best%20Seller');
+      return;
+    }
+    if (lowered.includes('tailoring') || lowered.includes('measure') || lowered.includes('tailor') || lowered.includes('design suggestion') || lowered.includes('customize')) {
       setOpen(false);
       navigate('/tailoring');
       return;
@@ -105,14 +201,11 @@ function ChatbotWidget() {
       navigate('/contact');
       return;
     }
-    if (lowered.includes('tracking')) {
-      setOpen(false);
-      navigate('/track-order');
-      return;
-    }
-
     handleSend(label);
   }
+
+  const hasUserMessages = messages.some((message) => message.sender === 'user');
+  const latestBotMessageId = [...messages].reverse().find((message) => message.sender === 'bot')?.id;
 
   return (
     <div className={`chatbot-widget ${open ? 'open' : ''}`}>
@@ -125,14 +218,16 @@ function ChatbotWidget() {
               <p>Use it for design direction, vendor choice, customization help, order tracking, or product discovery.</p>
             </div>
           </div>
-          <div className="chatbot-suggestions">
-            {quickPrompts.map((prompt) => (
-              <button key={prompt} type="button" className="chat-suggestion-chip" onClick={() => handleAssistantAction(prompt)}>
-                {prompt}
-              </button>
-            ))}
-          </div>
-          <div className="chatbot-body">
+          {!hasUserMessages ? (
+            <div className="chatbot-suggestions" aria-label="Starter chatbot actions">
+              {quickPrompts.map((prompt) => (
+                <button key={prompt} type="button" className="chat-suggestion-chip" onClick={() => handleAssistantAction(prompt)}>
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="chatbot-body" ref={bodyRef}>
             {messages.map((message) => (
               <div key={message.id} className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-bot'}`}>
                 <div className={`chat-bubble ${message.sender === 'user' ? 'chat-bubble-user' : 'chat-bubble-bot'}`}>{message.text}</div>
@@ -171,9 +266,9 @@ function ChatbotWidget() {
                     ))}
                   </div>
                 ) : null}
-                {message.sender === 'bot' && message.actions?.length ? (
+                {message.sender === 'bot' && message.id === latestBotMessageId && message.actions?.length ? (
                   <div className="chatbot-actions">
-                    {message.actions.map((action) => (
+                    {uniqueActions(message.actions).map((action) => (
                       <button key={`${message.id}-${action}`} type="button" className="chat-suggestion-chip subtle" onClick={() => handleAssistantAction(action)}>
                         {action}
                       </button>

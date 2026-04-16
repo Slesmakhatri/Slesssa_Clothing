@@ -1,6 +1,6 @@
 import ProductCard from '../shop/ProductCard';
 
-function RecommendationSectionBlock({ section, loading, emptyCopy }) {
+function RecommendationSectionBlock({ section, loading, emptyCopy, onQuickView }) {
   const items = section?.items || [];
 
   return (
@@ -16,15 +16,15 @@ function RecommendationSectionBlock({ section, loading, emptyCopy }) {
           <p>Scoring products from your catalog signals.</p>
         </div>
       ) : items.length ? (
-        <div className="shop-product-grid">
+        <div className="shop-product-grid recommendation-product-grid">
           {items.slice(0, 4).map((product) => (
             <div key={product.slug || product.id}>
-              <ProductCard product={product} />
+              <ProductCard product={product} onQuickView={onQuickView} />
             </div>
           ))}
         </div>
       ) : (
-        <div className="filter-empty-state">
+        <div className="filter-empty-state compact recommendation-empty-state">
           <h4>No products yet</h4>
           <p>{emptyCopy}</p>
         </div>
@@ -33,7 +33,7 @@ function RecommendationSectionBlock({ section, loading, emptyCopy }) {
   );
 }
 
-function RecommendationSections({ sections, loading = false, sectionOrder = [], emptyCopy = 'Try broadening your catalog signals.' }) {
+function RecommendationSections({ sections, loading = false, sectionOrder = [], emptyCopy = 'Try broadening your catalog signals.', onQuickView }) {
   const resolvedKeys = sectionOrder.length ? sectionOrder : Object.keys(sections || {});
 
   return (
@@ -44,6 +44,7 @@ function RecommendationSections({ sections, loading = false, sectionOrder = [], 
           section={sections?.[key]}
           loading={loading}
           emptyCopy={emptyCopy}
+          onQuickView={onQuickView}
         />
       ))}
     </div>

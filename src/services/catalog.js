@@ -17,6 +17,17 @@ function getNameIdentity(name = '') {
   return String(name).trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function inferAudience(product) {
+  const explicitAudience = product?.audience || product?.gender || product?.target_audience;
+  if (explicitAudience) return explicitAudience;
+  const tags = Array.isArray(product?.tags) ? product.tags.map((tag) => String(tag).toLowerCase()) : [];
+  const text = `${product?.name || ''} ${product?.title || ''} ${product?.description || ''} ${tags.join(' ')}`.toLowerCase();
+  if (tags.includes('men') || /\bmen\b|\bmale\b|\bmens\b/.test(text)) return 'Men';
+  if (tags.includes('women') || /\bwomen\b|\bfemale\b|\bwomens\b/.test(text)) return 'Women';
+  if (tags.includes('kids') || /\bkids\b|\bchildren\b/.test(text)) return 'Kids';
+  return 'Unisex';
+}
+
 export function normalizeProduct(product) {
   const category = product?.category_detail?.name || product?.category_name || product?.category || 'Ready to Wear';
   const sizes = Array.isArray(product?.sizes) ? product.sizes.filter(Boolean) : [];
@@ -36,6 +47,7 @@ export function normalizeProduct(product) {
     name: product?.name || product?.title || 'Slessaa Piece',
     title: product?.title || product?.name || 'Slessaa Piece',
     category,
+    audience: inferAudience(product),
     description: product?.description || 'Crafted for a refined, everyday wardrobe.',
     price: getProductPrice(product),
     oldPrice: getProductOldPrice(product),
@@ -74,9 +86,13 @@ export function dedupeProducts(products) {
 
 export function buildCuratedCollections(products) {
   const catalog = dedupeProducts(products);
+  const bestSellers = catalog
+    .filter((product) => product.is_best_seller || /best seller/i.test(product.badge || ''))
+    .sort((left, right) => Number(right.popularity || 0) - Number(left.popularity || 0));
   return {
     catalog,
     newIn: catalog.filter((product) => product.is_new || /new/i.test(product.badge)).slice(0, 12),
+    bestSellers: bestSellers.slice(0, 12),
     trending: [...catalog].sort((left, right) => Number(right.popularity || 0) - Number(left.popularity || 0)).slice(0, 12),
     recommended: [...catalog].sort((left, right) => Number(right.rating || 0) - Number(left.rating || 0)).slice(0, 12),
     dresses: catalog.filter((product) => /dress/i.test(product.category)).slice(0, 12),

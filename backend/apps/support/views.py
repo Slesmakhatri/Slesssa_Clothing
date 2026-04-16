@@ -17,9 +17,14 @@ class SupportMessageViewSet(viewsets.ViewSet):
         return Response(SupportMessageSerializer(list_support_messages(request.user), many=True).data)
 
     def create(self, request):
-        serializer = SupportMessageSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         user = request.user if getattr(request.user, "is_authenticated", False) else None
+        data = request.data.copy()
+        if user:
+            data["name"] = data.get("name") or getattr(user, "full_name", "") or getattr(user, "username", "")
+            data["email"] = data.get("email") or getattr(user, "email", "")
+            data["phone"] = data.get("phone") or getattr(user, "phone", "")
+        serializer = SupportMessageSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
         document = create_support_message(user, serializer.validated_data)
         return Response(SupportMessageSerializer(document).data, status=status.HTTP_201_CREATED)
 

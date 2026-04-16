@@ -795,7 +795,7 @@ def chatbot_assistant_reply(message, user=None, limit=6):
         ranked.sort(key=lambda item: item[0], reverse=True)
         reply["vendors"] = [
             {
-                "id": item["id"],
+                "id": item.get("id") or str(item.get("_id", "")),
                 "user": item.get("user"),
                 "brand_name": item.get("brand_name", ""),
                 "slug": item.get("slug", ""),

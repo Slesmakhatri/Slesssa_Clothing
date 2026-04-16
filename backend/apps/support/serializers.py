@@ -19,3 +19,8 @@ class SupportMessageSerializer(serializers.Serializer):
     reply_note = serializers.CharField(required=False, allow_blank=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
+
+    def validate(self, attrs):
+        if attrs.get("target_type") == "vendor" and not attrs.get("vendor_user_id"):
+            raise serializers.ValidationError({"vendor_user_id": "Vendor recipient is required for vendor support messages."})
+        return attrs

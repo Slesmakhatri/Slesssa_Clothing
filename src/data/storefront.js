@@ -1468,14 +1468,40 @@ function buildProduct(product, imageUrl) {
   };
 }
 
+const audiencePhotoPools = {
+  'men:kurta': productPhotoPools.kurta,
+  'women:kurta': [
+    productPhotoPools.dress[0],
+    productPhotoPools.dress[1],
+    productPhotoPools.dress[2],
+    productPhotoPools.dress[3],
+    imageSets.dress[0],
+    imageSets.dress[1]
+  ]
+};
+
+const productImageOverrides = {
+  'heritage-festival-kurta': productPhotoPools.dress[1],
+  'bindu-festival-kurta': productPhotoPools.dress[2],
+  'mitini-heritage-kurta': productPhotoPools.dress[3]
+};
+
+function getProductImagePool(product) {
+  const garmentType = product.garmentType;
+  const audienceKey = `${String(product.audience || 'all').toLowerCase()}:${garmentType}`;
+  return audiencePhotoPools[audienceKey] || productPhotoPools[garmentType] || imageSets[garmentType] || imageSets.shirt;
+}
+
 const productPhotoIndexes = {};
 
 export const storefrontProducts = [...productBlueprints, ...extraProductBlueprints].map((product) => {
   const garmentType = product.garmentType;
-  const imagePool = productPhotoPools[garmentType] || imageSets[garmentType] || imageSets.shirt;
-  const nextIndex = productPhotoIndexes[garmentType] || 0;
-  productPhotoIndexes[garmentType] = nextIndex + 1;
-  const imageUrl = imagePool[nextIndex] || imagePool[imagePool.length - 1];
+  const audience = String(product.audience || 'all').toLowerCase();
+  const imageKey = `${audience}:${garmentType}`;
+  const imagePool = getProductImagePool(product);
+  const nextIndex = productPhotoIndexes[imageKey] || 0;
+  productPhotoIndexes[imageKey] = nextIndex + 1;
+  const imageUrl = productImageOverrides[product.slug] || imagePool[nextIndex] || imagePool[imagePool.length - 1];
   return buildProduct(product, imageUrl);
 });
 
@@ -1571,7 +1597,8 @@ export const footerLinks = {
     { label: 'Track Order', to: '/track-order' },
     { label: 'Cart', to: '/cart' },
     { label: 'Checkout', to: '/checkout' },
-    { label: 'Contact', to: '/contact' }
+    { label: 'Contact', to: '/contact' },
+    { label: 'Apply as Vendor', to: '/apply-vendor' }
   ]
 };
 

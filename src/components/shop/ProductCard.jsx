@@ -31,6 +31,11 @@ function ProductCard({ product, onQuickView }) {
   const productType = getProductType(product);
   const canAddToCart = isReadyMadeProduct(product);
   const canCustomize = isCustomizableProduct(product);
+  const productName = product.title || product.name || 'Slessaa product';
+  const vendorName = product.vendor_name || product.vendorName || product.vendor_detail?.brand_name || '';
+  const productCategory = product.category || product.category_name || product.category_detail?.name || 'Slessaa edit';
+  const productAudience = product.audience || product.product_type || '';
+  const productTypeLabel = productType === 'both' ? 'Ready-made + Customizable' : productType === 'customizable' ? 'Customizable' : 'Ready-made';
 
   useEffect(() => {
     setPrimaryImage(productImage);
@@ -57,18 +62,18 @@ function ProductCard({ product, onQuickView }) {
   }
 
   return (
-    <article className="product-card premium-product-card">
-      <div className="product-media premium-product-media">
-        <Link to={`/shop/${productPath}`} className="product-media-stack" aria-label={`Open ${product.title || product.name}`}>
+    <article className="product-card premium-product-card ecommerce-product-card">
+      <div className="product-media premium-product-media ecommerce-product-card__media">
+        <Link to={`/shop/${productPath}`} className="product-media-stack ecommerce-product-card__image-link" aria-label={`Open ${productName}`}>
           <img
             src={primaryImage}
-            alt={product.title || product.name}
+            alt={productName}
             className="product-image-primary"
             onError={() => setPrimaryImage(getCategoryFallbackImage(product) || DEFAULT_PRODUCT_IMAGE)}
           />
           <img
             src={secondaryImage}
-            alt={`${product.title || product.name} alternate view`}
+            alt={`${productName} alternate view`}
             className="product-image-secondary"
             onError={() => setSecondaryImage(getCategoryFallbackImage(product) || primaryImage || DEFAULT_PRODUCT_IMAGE)}
           />
@@ -92,42 +97,42 @@ function ProductCard({ product, onQuickView }) {
         </div>
       </div>
 
-      <div className="product-body">
-        <div className="product-copy-block">
+      <div className="product-body ecommerce-product-card__body">
+        <div className="product-copy-block ecommerce-product-card__content">
           <div className="product-card-topline">
-            <span className="product-category">{product.category}</span>
-            <span className="product-audience">{product.audience}</span>
+            <span className="product-category">{productCategory}</span>
+            {productAudience ? <span className="product-audience">{productAudience}</span> : null}
           </div>
-          {product.sustainabilityLabel !== 'Guidance unavailable' ? (
-            <div className="product-eco-inline">
+          <h5 className="product-card-title">
+            <Link to={`/shop/${productPath}`}>{productName}</Link>
+          </h5>
+          <div className="product-price-stack ecommerce-product-card__price">
+            <strong>NPR {price.toLocaleString()}</strong>
+            {oldPrice > price ? <span>NPR {oldPrice.toLocaleString()}</span> : null}
+          </div>
+          {product.description ? <p className="product-card-description">{product.description}</p> : null}
+          <div className="mood-values ecommerce-product-card__meta">
+            <span className="value-pill">{productTypeLabel}</span>
+            {vendorName ? <span className="value-pill subtle">{vendorName}</span> : null}
+          </div>
+          {product.sustainabilityLabel && product.sustainabilityLabel !== 'Guidance unavailable' ? (
+            <div className="product-eco-inline ecommerce-product-card__eco">
               <span className="product-eco-badge">
                 <i className="bi bi-leaf-fill"></i> {product.sustainabilityLabel}
               </span>
-              <small>{product.impactBand}</small>
+              {product.impactBand ? <small>{product.impactBand}</small> : null}
             </div>
           ) : null}
-          <h5 className="product-card-title">
-            <Link to={`/shop/${productPath}`}>{product.title || product.name}</Link>
-          </h5>
-          <p className="product-card-description">{product.description}</p>
-          <div className="mood-values">
-            <span className="value-pill">{productType === 'both' ? 'Ready-made + Customizable' : productType === 'customizable' ? 'Customizable' : 'Ready-made'}</span>
-            {product.vendor_name || product.vendorName ? <span className="value-pill subtle">{product.vendor_name || product.vendorName}</span> : null}
-          </div>
-          <div className="product-size-row" aria-label="Available sizes">
+          {sizePreview.length ? <div className="product-size-row" aria-label="Available sizes">
             {sizePreview.map((size) => (
               <span key={size} className="product-size-pill">
                 {size}
               </span>
             ))}
-          </div>
+          </div> : null}
         </div>
 
-        <div className="product-footer">
-          <div className="product-price-stack">
-            <strong>NPR {price.toLocaleString()}</strong>
-            {oldPrice > price ? <span>NPR {oldPrice.toLocaleString()}</span> : null}
-          </div>
+        <div className="product-footer ecommerce-product-card__actions">
           <div className="product-cta-group">
             {canAddToCart ? (
               <button

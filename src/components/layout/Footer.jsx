@@ -1,6 +1,18 @@
 import { Link } from 'react-router-dom';
 import { footerLinks } from '../../data/storefront';
 
+function FooterLink({ item }) {
+  function handleClick() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  return (
+    <Link to={item.to} className="footer-link footer-nav-link" onClick={handleClick} aria-label={`Open ${item.label}`}>
+      {item.label}
+    </Link>
+  );
+}
+
 function Footer() {
   return (
     <footer className="site-footer">
@@ -28,35 +40,30 @@ function Footer() {
           <div className="col-md-4">
             <h6>Shop</h6>
             {footerLinks.quick.map((item) => (
-              <Link key={item.label} to={item.to} className="footer-link">
-                {item.label}
-              </Link>
+              <FooterLink key={item.label} item={item} />
             ))}
           </div>
           <div className="col-md-4">
             <h6>Support</h6>
             {footerLinks.support.map((item) => (
-              <Link key={item.label} to={item.to} className="footer-link">
-                {item.label}
-              </Link>
+              <FooterLink key={item.label} item={item} />
             ))}
-            <Link to="/apply-vendor" className="footer-link">Apply as Vendor</Link>
           </div>
           <div className="col-md-4">
             <h6>Visit</h6>
-            <span className="footer-link">Lazimpat, Kathmandu</span>
-            <span className="footer-link">+977 9800000000</span>
-            <span className="footer-link">hello@slessaa.com</span>
+            <span className="footer-link footer-contact-line">Lazimpat, Kathmandu</span>
+            <a className="footer-link footer-nav-link" href="tel:+9779800000000">+977 9800000000</a>
+            <a className="footer-link footer-nav-link" href="mailto:hello@slessaa.com">hello@slessaa.com</a>
           </div>
         </div>
 
         <div className="footer-bottom">
           <span>{'\u00A9'} 2026 Slessaa Clothing</span>
           <div className="footer-bottom-links">
-            <Link to="/about">About</Link>
-            <Link to="/contact">Contact</Link>
-            <Link to="/apply-vendor">Apply as Vendor</Link>
-            <Link to="/checkout">Payments</Link>
+            <Link to="/about" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>About</Link>
+            <Link to="/contact" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Contact</Link>
+            <Link to="/apply-vendor" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Apply as Vendor</Link>
+            <Link to="/checkout" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Payments</Link>
           </div>
         </div>
       </div>

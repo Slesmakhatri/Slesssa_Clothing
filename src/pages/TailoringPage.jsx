@@ -311,6 +311,8 @@ function TailoringPage() {
     const reference = buildReferencePayload(product);
     setSelectedSuggestion(reference);
     setErrors((current) => ({ ...current, inspiration: '' }));
+    setDesignPrompt(`${product.audience || ''} ${product.category || product.garmentType || 'custom outfit'} inspired by ${product.name}`.trim());
+    setDesignSuggestionError('');
     setForm((current) => ({
       ...current,
       clothingType: product.category || current.clothingType,
@@ -403,6 +405,67 @@ function TailoringPage() {
     } finally {
       setDesignSuggestionLoading(false);
     }
+  }
+
+  function renderDesignRecommendationPanel() {
+    const shouldShowResult = designSuggestionLoading || designSuggestionError || designSuggestion;
+
+    return (
+      <section className="tailoring-group-card ai-design-stage-card">
+        <div className="tailoring-group-head">
+          <span className="section-eyebrow">AI Design Recommendation</span>
+          <h5>Generate a design brief from your inspiration</h5>
+          <p>Type your idea or select a similar design above, then generate a structured recommendation before customizing the details.</p>
+        </div>
+        <div className="ai-tailoring-panel">
+          <div>
+            <h6>Turn a short idea into a structured tailoring brief</h6>
+            <p>Example: modern kurta for wedding, minimal ivory blazer, or relaxed festive dress.</p>
+          </div>
+          <div className="ai-tailoring-controls">
+            <input
+              className="form-control premium-input"
+              value={designPrompt}
+              onChange={(event) => {
+                setDesignPrompt(event.target.value);
+                setDesignSuggestionError('');
+              }}
+              placeholder="Describe the design you want"
+            />
+            <button type="button" className="btn btn-slessaa btn-slessaa-primary" onClick={handleGenerateDesignSuggestion} disabled={designSuggestionLoading}>
+              {designSuggestionLoading ? 'Generating...' : 'Generate Design'}
+            </button>
+          </div>
+          {shouldShowResult ? (
+            <div className="ai-design-result-slot">
+              {designSuggestionError ? <div className="invalid-feedback d-block">{designSuggestionError}</div> : null}
+              {designSuggestionLoading ? (
+                <div className="ai-suggestion-card ai-suggestion-card--loading">
+                  <strong>Generating your design direction</strong>
+                  <p>Reading the prompt and matching it to style, fabric, fit, neckline, and color guidance.</p>
+                </div>
+              ) : null}
+              {designSuggestion ? (
+                <div className="ai-suggestion-card ai-suggestion-card--revealed">
+                  <div>
+                    <strong>{designSuggestion.title}</strong>
+                    <span>{designSuggestion.occasion}</span>
+                  </div>
+                  <div className="tailoring-sustainability-chips">
+                    <span className="chip">{designSuggestion.style_direction}</span>
+                    <span className="chip">{designSuggestion.fabric}</span>
+                    <span className="chip">{designSuggestion.fit}</span>
+                    <span className="chip">{designSuggestion.neckline}</span>
+                    {(designSuggestion.colors || []).slice(0, 2).map((item) => <span key={item} className="chip">{item}</span>)}
+                  </div>
+                  <p>{designSuggestion.notes}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
   }
 
   function handleCityChange(nextCity) {
@@ -593,6 +656,8 @@ function TailoringPage() {
                     {errors.inspiration ? <div className="invalid-feedback d-block">{errors.inspiration}</div> : null}
                   </section>
 
+                  {renderDesignRecommendationPanel()}
+
                   <section className="tailoring-group-card">
                     <div className="tailoring-group-head">
                       <h5>Choose a similar design</h5>
@@ -760,44 +825,6 @@ function TailoringPage() {
                     <div className="tailoring-group-head">
                       <h5>Personalize the clothing</h5>
                       <p>Tell us what to change, refine, or elevate for your version.</p>
-                    </div>
-                    <div className="ai-tailoring-panel">
-                      <div>
-                        <span className="section-eyebrow">AI Design Recommendation</span>
-                        <h6>Turn a short idea into a structured tailoring brief</h6>
-                        <p>Example: modern kurta for wedding, minimal ivory blazer, or relaxed festive dress.</p>
-                      </div>
-                      <div className="ai-tailoring-controls">
-                        <input
-                          className="form-control premium-input"
-                          value={designPrompt}
-                          onChange={(event) => {
-                            setDesignPrompt(event.target.value);
-                            setDesignSuggestionError('');
-                          }}
-                          placeholder="Describe the design you want"
-                        />
-                        <button type="button" className="btn btn-slessaa btn-slessaa-primary" onClick={handleGenerateDesignSuggestion} disabled={designSuggestionLoading}>
-                          {designSuggestionLoading ? 'Generating...' : 'Generate Design'}
-                        </button>
-                      </div>
-                      {designSuggestionError ? <div className="invalid-feedback d-block mt-2">{designSuggestionError}</div> : null}
-                      {designSuggestion ? (
-                        <div className="ai-suggestion-card">
-                          <div>
-                            <strong>{designSuggestion.title}</strong>
-                            <span>{designSuggestion.occasion}</span>
-                          </div>
-                          <div className="tailoring-sustainability-chips">
-                            <span className="chip">{designSuggestion.style_direction}</span>
-                            <span className="chip">{designSuggestion.fabric}</span>
-                            <span className="chip">{designSuggestion.fit}</span>
-                            <span className="chip">{designSuggestion.neckline}</span>
-                            {(designSuggestion.colors || []).slice(0, 2).map((item) => <span key={item} className="chip">{item}</span>)}
-                          </div>
-                          <p>{designSuggestion.notes}</p>
-                        </div>
-                      ) : null}
                     </div>
                     <div className="row g-3">
                       <div className="col-md-6">
