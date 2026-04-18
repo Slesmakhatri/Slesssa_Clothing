@@ -48,6 +48,11 @@ export function getProductIdentifier(product) {
   return product?.slug || product?.id || null;
 }
 
+export function getProductDetailPath(product) {
+  const identifier = getProductIdentifier(product);
+  return identifier ? `/shop/${encodeURIComponent(identifier)}` : '/shop';
+}
+
 export function getProductImage(product) {
   if (product?.image_url) {
     return product.image_url;

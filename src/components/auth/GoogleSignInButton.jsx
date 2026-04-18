@@ -1,6 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { getGoogleAuthConfig, loginWithGoogle } from '../../services/api';
 
+function isPrivateNetworkHost(hostname) {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    /^192\.168\./.test(hostname) ||
+    /^10\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
+function createGoogleConfigError(message) {
+  const error = new Error(message);
+  error.payload = { detail: message };
+  return error;
+}
+
 function loadGoogleScript() {
   return new Promise((resolve, reject) => {
     if (window.google?.accounts?.id) {
@@ -45,15 +61,26 @@ function GoogleSignInButton({ accountType = 'customer', label = 'Continue with G
         const [google, config] = await Promise.all([loadGoogleScript(), getGoogleAuthConfig()]);
         const clientId = config?.client_id;
 
-        if (!active || !clientId || !buttonRef.current) {
+        if (!active || !buttonRef.current) {
           if (active) setLoading(false);
           return;
+        }
+
+        if (!config?.enabled || !clientId) {
+          throw createGoogleConfigError('Google sign-in is not configured on the server. Use email login or add GOOGLE_CLIENT_ID in backend/.env.');
         }
 
         google.accounts.id.initialize({
           client_id: clientId,
           callback: async (response) => {
             try {
+              if (!response?.credential) {
+                throw createGoogleConfigError(
+                  isPrivateNetworkHost(window.location.hostname)
+                    ? `Google sign-in is not allowed for ${window.location.origin}. Add this exact URL as an Authorized JavaScript origin in Google Cloud for your OAuth client.`
+                    : 'Google did not return a sign-in credential.'
+                );
+              }
               const payload = await loginWithGoogle({
                 credential: response.credential,
                 account_type: accountType
@@ -74,7 +101,16 @@ function GoogleSignInButton({ accountType = 'customer', label = 'Continue with G
           width: buttonRef.current.offsetWidth || 320
         });
       } catch (error) {
-        onErrorRef.current?.(error);
+        const message = error?.message || '';
+        if (message.includes('idpiframe_initialization_failed') || message.includes('origin')) {
+          onErrorRef.current?.(
+            createGoogleConfigError(
+              `Google sign-in is not allowed for ${window.location.origin}. Add this exact URL as an Authorized JavaScript origin in Google Cloud for your OAuth client.`
+            )
+          );
+        } else {
+          onErrorRef.current?.(error);
+        }
       } finally {
         if (active) setLoading(false);
       }

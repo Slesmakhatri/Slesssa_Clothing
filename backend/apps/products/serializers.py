@@ -33,6 +33,7 @@ class ProductSerializer(serializers.Serializer):
     price = serializers.DecimalField(max_digits=10, decimal_places=2)
     discount_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     oldPrice = serializers.SerializerMethodField()
+    old_price = serializers.SerializerMethodField()
     stock = serializers.IntegerField(required=False)
     sizes = serializers.ListField(child=serializers.CharField(), required=False)
     colors = serializers.ListField(child=serializers.CharField(), required=False)
@@ -76,6 +77,9 @@ class ProductSerializer(serializers.Serializer):
 
     def get_oldPrice(self, obj):
         return obj.get("discount_price")
+
+    def get_old_price(self, obj):
+        return obj.get("old_price") or obj.get("oldPrice") or obj.get("discount_price")
 
     def get_reviews(self, obj):
         return obj.get("reviews_count", 0)

@@ -209,6 +209,7 @@ def update_vendor(vendor_id, data):
             "location",
             "logo",
             "banner",
+            "approval_status",
             "customization_services",
         )
         if key in data
@@ -275,19 +276,21 @@ def update_vendor_application(application_id, data):
     updates["updated_at"] = utcnow()
     vendor_applications_collection().update_one({"id": application["id"]}, {"$set": updates})
     updated = get_vendor_application(application["id"])
-    if updated and updated.get("status") == "approved":
+    if updated and updated.get("status") in {"approved", "rejected"}:
         vendor = vendors_collection().find_one({"contact_email": updated["email"]}) or vendors_collection().find_one({"user_detail.email": updated["email"]})
         if vendor:
-            vendors_collection().update_one(
-                {"id": vendor["id"]},
-                {
-                    "$set": {
-                        "approval_status": "approved",
+            vendor_updates = {"approval_status": updated["status"]}
+            if updated.get("status") == "approved":
+                vendor_updates.update(
+                    {
                         "brand_name": vendor.get("brand_name") or updated.get("business_name", ""),
                         "description": vendor.get("description") or updated.get("business_description", ""),
                         "specialization": vendor.get("specialization") or updated.get("specialization", ""),
                         "location": vendor.get("location") or updated.get("location", ""),
                     }
-                },
+                )
+            vendors_collection().update_one(
+                {"id": vendor["id"]},
+                {"$set": vendor_updates},
             )
     return updated

@@ -17,7 +17,7 @@ APP_API_KEY = os.getenv("API_KEY", "")
 APP_PUBLIC_API_KEY = os.getenv("PUBLIC_API_KEY", "")
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver").split(",")
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*" if DEBUG else "127.0.0.1,localhost,testserver").split(",")
     if host.strip()
 ]
 
@@ -122,6 +122,14 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    regex.strip()
+    for regex in os.getenv(
+        "CORS_ALLOWED_ORIGIN_REGEXES",
+        r"^http://192\.168\.\d{1,3}\.\d{1,3}:5173$,^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}:5173$,^http://172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}:5173$",
+    ).split(",")
+    if regex.strip()
+]
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
@@ -144,6 +152,8 @@ OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", FRONTEND_BASE_URL)
 OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "Slessaa AI Fashion")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
+IMAGE_GENERATION_API_URL = os.getenv("IMAGE_GENERATION_API_URL", "")
+IMAGE_GENERATION_API_KEY = os.getenv("IMAGE_GENERATION_API_KEY", "")
 
 # MongoDB is the only application data store.
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/")

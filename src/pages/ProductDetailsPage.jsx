@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
 import ProductCard from '../components/shop/ProductCard';
+import SectionTitle from '../components/common/SectionTitle';
 import { storefrontProducts } from '../data/storefront';
 import { createProductQuestion, createReview, getProduct, getRecommendations, listOrders, listProductQuestions, listProducts, listReviews } from '../services/api';
 import RecommendationSections from '../components/common/RecommendationSections';
@@ -575,9 +576,9 @@ function ProductDetailsPage() {
             <p>These alternatives are ranked with the same simplified fabric-based sustainability guidance used across the app.</p>
           </div>
           {sustainableAlternatives.length ? (
-            <div className="shop-product-grid sustainability-alt-grid">
+            <div className="row g-3 g-lg-4 align-items-stretch product-section-grid sustainability-alt-grid">
               {sustainableAlternatives.map((item) => (
-                <div key={item.slug}>
+                <div key={item.slug || item.id} className="col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex">
                   <ProductCard product={item} />
                 </div>
               ))}
@@ -598,13 +599,20 @@ function ProductDetailsPage() {
             <h2>Similar items from the marketplace</h2>
             <p>Browse similar pieces with related styling, category cues, and matching product identity data.</p>
           </div>
-          <div className="shop-product-grid">
-            {related.map((item) => (
-              <div key={item.slug}>
-                <ProductCard product={item} />
-              </div>
-            ))}
-          </div>
+          {related.length ? (
+            <div className="row g-3 g-lg-4 align-items-stretch product-section-grid">
+              {related.map((item) => (
+                <div key={item.slug || item.id} className="col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex">
+                  <ProductCard product={item} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="filter-empty-state compact homepage-empty-state">
+              <h4>No similar products yet</h4>
+              <p>More products like this will appear as the catalog grows.</p>
+            </div>
+          )}
         </div>
       </section>
 

@@ -53,6 +53,7 @@ function RecommendationsPage() {
   const [designSuggestion, setDesignSuggestion] = useState(null);
   const [designLoading, setDesignLoading] = useState(false);
   const [designSaving, setDesignSaving] = useState(false);
+  const [designImageFailed, setDesignImageFailed] = useState(false);
   const [uploadAnalysis, setUploadAnalysis] = useState(null);
   const [uploadPreview, setUploadPreview] = useState('');
   const [loading, setLoading] = useState(true);
@@ -220,6 +221,7 @@ function RecommendationsPage() {
   async function handleGenerateDesignSuggestion(event) {
     if (event) event.preventDefault();
     setDesignLoading(true);
+    setDesignImageFailed(false);
     try {
       const payload = await getDesignSuggestion({ prompt: designPrompt });
       setDesignSuggestion(payload.suggestion || null);
@@ -388,6 +390,18 @@ function RecommendationsPage() {
                     {!isAuthenticated ? <small>Log in to save generated design concepts.</small> : null}
                   </form>
 
+                  {designLoading ? (
+                    <div className="design-suggestion-card design-suggestion-card--loading">
+                      <div className="design-visual-placeholder" aria-hidden="true">
+                        <span></span>
+                      </div>
+                      <div>
+                        <strong>Generating design and visual preview</strong>
+                        <p>Building the concept, tags, fabric notes, and image direction from your prompt.</p>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {designSuggestion ? (
                     <div className="design-suggestion-card">
                       <div className="design-suggestion-head">
@@ -410,6 +424,27 @@ function RecommendationsPage() {
                           <span>Occasion</span>
                           <strong>{designSuggestion.occasion}</strong>
                         </article>
+                      </div>
+                      <div className="design-suggestion-visual">
+                        {designSuggestion.image_url && !designImageFailed ? (
+                          <img
+                            src={designSuggestion.image_url}
+                            alt={`${designSuggestion.title} visual design`}
+                            onError={() => setDesignImageFailed(true)}
+                          />
+                        ) : (
+                          <div className="design-visual-fallback">
+                            <strong>Visual preview unavailable</strong>
+                            <p>The text concept is ready. Try generating again to refresh the image preview.</p>
+                          </div>
+                        )}
+                        <small>
+                          {designSuggestion.image_generation_status === 'fallback'
+                            ? 'Fallback visual based on your prompt'
+                            : designSuggestion.image_source
+                              ? `Image source: ${designSuggestion.image_source}`
+                              : 'Generated visual design'}
+                        </small>
                       </div>
                       <div className="design-suggestion-block">
                         <strong>Suggested Colors</strong>

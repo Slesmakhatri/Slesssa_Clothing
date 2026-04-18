@@ -3,6 +3,8 @@ import ProductCard from '../shop/ProductCard';
 import { getRecommendations } from '../../services/api';
 import { getRecentViewedProductIds } from '../../services/recentViews';
 
+const productGridColumnClass = 'col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex';
+
 function AiRecommendationSection({ eyebrow, title, text, preferences, emptyTitle = 'No recommendations yet.' }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ function AiRecommendationSection({ eyebrow, title, text, preferences, emptyTitle
   }, [preferenceKey]);
 
   return (
-    <section className="section-space bg-soft">
+    <section className="section-space bg-soft homepage-section homepage-ai-section">
       <div className="container">
         <div className="section-title">
           <span className="section-eyebrow">{eyebrow}</span>
@@ -49,9 +51,9 @@ function AiRecommendationSection({ eyebrow, title, text, preferences, emptyTitle
             <p>Ranking products from your live catalog.</p>
           </div>
         ) : items.length ? (
-          <div className="shop-product-grid">
+          <div className="row g-3 g-lg-4 align-items-stretch homepage-product-row">
             {items.slice(0, 4).map((product) => (
-              <div key={product.slug || product.id}>
+              <div key={product.slug || product.id} className={productGridColumnClass}>
                 <ProductCard product={product} />
               </div>
             ))}

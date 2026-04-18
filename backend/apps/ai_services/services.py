@@ -3,7 +3,7 @@ from decimal import Decimal
 from io import BytesIO
 import json
 import re
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
 import requests
 from django.conf import settings
@@ -133,6 +133,35 @@ DESIGN_PATTERN_MAP = {
     "minimal": ["Hidden button stand", "Monochrome stitch lines", "Sharp silhouette panels"],
 }
 
+DESIGN_VISUAL_COLOR_HEX = {
+    "antique gold": "#b08d57",
+    "black": "#1f2933",
+    "camel": "#b7794d",
+    "charcoal": "#2f3542",
+    "cream": "#f6e9d7",
+    "crimson": "#b4233a",
+    "deep olive": "#4d5d3d",
+    "emerald": "#0f7c62",
+    "gold": "#d4a017",
+    "ivory": "#fff8ec",
+    "maroon": "#7b1e32",
+    "muted gold": "#c5a35d",
+    "muted teal": "#3c6382",
+    "rose": "#d77a8a",
+    "stone": "#cfc7bc",
+    "wine": "#6f1d3f",
+}
+
+DESIGN_VISUAL_GARMENT_PATHS = {
+    "kurta": '<path d="M170 92 L240 62 L310 92 L342 392 L290 408 L276 205 L252 430 L228 430 L204 205 L190 408 L138 392 Z" />',
+    "dress": '<path d="M214 74 L266 74 L302 186 L354 430 L126 430 L178 186 Z" />',
+    "blazer": '<path d="M168 98 L222 70 L240 146 L258 70 L312 98 L342 410 L266 410 L240 210 L214 410 L138 410 Z" />',
+    "suit": '<path d="M168 98 L222 70 L240 146 L258 70 L312 98 L342 410 L266 410 L240 210 L214 410 L138 410 Z" />',
+    "shirt": '<path d="M154 112 L220 72 L240 112 L260 72 L326 112 L306 392 L174 392 Z" />',
+    "jacket": '<path d="M158 98 L220 70 L240 132 L260 70 L322 98 L344 386 L258 406 L240 214 L222 406 L136 386 Z" />',
+    "default": '<path d="M168 98 L222 70 L240 118 L258 70 L312 98 L342 410 L138 410 Z" />',
+}
+
 
 def products_collection():
     return get_collection("products")
@@ -152,6 +181,10 @@ def carts_collection():
 
 def vendors_collection():
     return get_collection("vendors")
+
+
+def tailor_profiles_collection():
+    return get_collection("tailor_profiles")
 
 
 def _pick_design_colors(tokens, preferred_colors=None):
@@ -225,6 +258,116 @@ def _detect_design_neckline(tokens, garment_type):
     return "Clean modest neckline"
 
 
+def _color_to_hex(color_name, fallback):
+    normalized = str(color_name or "").strip().lower()
+    return DESIGN_VISUAL_COLOR_HEX.get(normalized, fallback)
+
+
+def _design_image_prompt(prompt, suggestion):
+    colors = ", ".join(suggestion.get("colors") or [])
+    pattern_ideas = ", ".join(suggestion.get("pattern_ideas") or [])
+    return (
+        "Fashion design concept illustration, "
+        f"{suggestion.get('title', 'custom garment')}, "
+        f"{suggestion.get('garment_type', 'garment')}, "
+        f"{suggestion.get('style_direction', 'modern styling')}, "
+        f"{suggestion.get('fabric', 'premium fabric')}, "
+        f"colors {colors}, details {pattern_ideas}. "
+        "Clean full body product design render, neutral studio background."
+    )
+
+
+def _call_design_image_api(image_prompt):
+    if not settings.IMAGE_GENERATION_API_URL:
+        return {}
+
+    headers = {"Content-Type": "application/json"}
+    if settings.IMAGE_GENERATION_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.IMAGE_GENERATION_API_KEY}"
+
+    response = requests.post(
+        settings.IMAGE_GENERATION_API_URL,
+        headers=headers,
+        json={"prompt": image_prompt, "size": "1024x1024", "response_format": "url"},
+        timeout=35,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    image_url = (
+        payload.get("image_url")
+        or payload.get("url")
+        or (((payload.get("data") or [{}])[0] or {}).get("url"))
+    )
+    if image_url:
+        return {
+            "image_url": image_url,
+            "image_source": "image_generation_api",
+            "image_generation_status": "generated",
+        }
+    return {}
+
+
+def _fallback_design_visual(prompt, suggestion):
+    colors = suggestion.get("colors") or []
+    primary = _color_to_hex(colors[0] if colors else "", "#b7794d")
+    secondary = _color_to_hex(colors[1] if len(colors) > 1 else "", "#fff8ec")
+    accent = _color_to_hex(colors[2] if len(colors) > 2 else "", "#3c6382")
+    garment_key = str(suggestion.get("garment_type") or "").strip().lower()
+    garment_path = DESIGN_VISUAL_GARMENT_PATHS.get(garment_key, DESIGN_VISUAL_GARMENT_PATHS["default"])
+    title = str(suggestion.get("title") or "AI design concept")
+    subtitle = str(suggestion.get("fabric") or "Premium fabric")
+    detail = str((suggestion.get("pattern_ideas") or ["Tailored detailing"])[0])
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1280" viewBox="0 0 480 640" role="img" aria-label="{title}">
+  <defs>
+    <linearGradient id="garment" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="{primary}"/>
+      <stop offset="1" stop-color="{secondary}"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#fffaf5"/>
+      <stop offset="1" stop-color="#f2e7db"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#bg)"/>
+  <circle cx="96" cy="108" r="74" fill="{accent}" opacity="0.14"/>
+  <circle cx="398" cy="514" r="92" fill="{primary}" opacity="0.12"/>
+  <g transform="translate(0 42)">
+    <ellipse cx="240" cy="442" rx="124" ry="22" fill="#1f2933" opacity="0.12"/>
+    <g fill="url(#garment)" stroke="#283747" stroke-width="5" stroke-linejoin="round">
+      {garment_path}
+    </g>
+    <path d="M206 118 C226 138 254 138 274 118" fill="none" stroke="{accent}" stroke-width="7" stroke-linecap="round"/>
+    <path d="M240 135 L240 346" fill="none" stroke="{accent}" stroke-width="4" stroke-dasharray="12 12" opacity="0.7"/>
+    <path d="M185 184 C220 204 260 204 296 184" fill="none" stroke="{accent}" stroke-width="4" opacity="0.58"/>
+    <path d="M177 326 C218 350 264 350 306 326" fill="none" stroke="{accent}" stroke-width="4" opacity="0.52"/>
+  </g>
+  <g font-family="Manrope, Arial, sans-serif" fill="#243b53">
+    <text x="44" y="538" font-size="24" font-weight="800">{title[:34]}</text>
+    <text x="44" y="572" font-size="16" font-weight="700" fill="#7b5d4a">{subtitle[:42]}</text>
+    <text x="44" y="602" font-size="14" fill="#52616f">{detail[:52]}</text>
+  </g>
+</svg>'''
+    return {
+        "image_url": f"data:image/svg+xml;charset=UTF-8,{quote(svg)}",
+        "image_source": "fallback_vector",
+        "image_generation_status": "fallback",
+    }
+
+
+def generate_design_visual(prompt, suggestion):
+    image_prompt = _design_image_prompt(prompt, suggestion)
+    try:
+        visual = _call_design_image_api(image_prompt)
+    except requests.RequestException:
+        visual = {}
+    if not visual:
+        visual = _fallback_design_visual(prompt, suggestion)
+    return {
+        **visual,
+        "image_prompt": image_prompt,
+    }
+
+
 def generate_design_suggestion(payload):
     prompt = (payload.get("prompt") or "").strip()
     lowered = prompt.lower()
@@ -243,7 +386,7 @@ def generate_design_suggestion(payload):
         f"and finishes it with {fit.lower()} plus {neckline.lower()}."
     )
     title = f"{style_direction} {garment_type}".strip()
-    return {
+    suggestion = {
         "title": title,
         "garment_type": garment_type,
         "style_direction": style_direction,
@@ -255,10 +398,12 @@ def generate_design_suggestion(payload):
         "notes": notes,
         "occasion": occasion,
     }
+    suggestion.update(generate_design_visual(prompt, suggestion))
+    return suggestion
 
 
 def _active_products():
-    return [clean_document(item) for item in products_collection().find({"is_active": True})]
+    return [clean_document(item) for item in products_collection().find({"is_active": {"$ne": False}})]
 
 
 def _safe_decimal(value):
@@ -377,6 +522,20 @@ def _recent_products(products, limit=8):
     return ordered[:limit]
 
 
+def _dedupe_products(products, limit=8):
+    deduped = []
+    seen = set()
+    for product in products:
+        identity = product.get("id") or product.get("slug") or product.get("name")
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(product)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
 def _product_by_id(product_id):
     try:
         product_id = int(product_id)
@@ -465,6 +624,25 @@ def _trending_products(limit=8):
         reverse=True,
     )
     return ranked[:limit]
+
+
+def _featured_products(limit=8):
+    products = _active_products()
+    featured = [product for product in products if product.get("is_featured")]
+    featured.sort(key=lambda item: (_score_trending(item), item.get("created_at"), item.get("id", 0)), reverse=True)
+    return featured[:limit]
+
+
+def _fallback_products(limit=8):
+    products = _active_products()
+    return _dedupe_products(
+        [
+            *_trending_products(limit=limit),
+            *_featured_products(limit=limit),
+            *_recent_products(products, limit=limit),
+        ],
+        limit=limit,
+    )
 
 
 def _recent_view_products(recent_viewed_ids):
@@ -607,7 +785,7 @@ def recommend_products(user=None, preferences=None, limit=8):
 
     scored.sort(key=lambda item: (item[0], _score_trending(item[1]), item[1].get("created_at"), item[1].get("id", 0)), reverse=True)
     ranked = [product for _, product in scored[:limit]]
-    return ranked or _recent_products(products, limit=limit)
+    return ranked or _fallback_products(limit=limit)
 
 
 def build_recommendation_sections(user=None, preferences=None, *, limit=8):
@@ -634,8 +812,8 @@ def build_recommendation_sections(user=None, preferences=None, *, limit=8):
         recommended_for_you = [product for _, product in personalized_scored[:limit]]
         recommended_reason = "Ranked from browsing history, cart/order patterns, and live trending signals."
     else:
-        recommended_for_you = _trending_products(limit=limit)
-        recommended_reason = "New-user fallback based on live trending products."
+        recommended_for_you = _fallback_products(limit=limit)
+        recommended_reason = "New-user fallback based on trending, featured, and latest catalog products."
 
     similar_items = []
     if current_product:
@@ -648,6 +826,8 @@ def build_recommendation_sections(user=None, preferences=None, *, limit=8):
         similar_items = [product for _, product in similar_scored[:limit]]
 
     trending_now = _trending_products(limit=limit)
+    featured_products = _featured_products(limit=limit)
+    latest_products = _recent_products(products, limit=limit)
     fallback_recommended = recommended_for_you or trending_now
     return {
         "recommended": fallback_recommended,
@@ -666,6 +846,16 @@ def build_recommendation_sections(user=None, preferences=None, *, limit=8):
                 "title": "Trending Now",
                 "description": "Ranked from popularity, ratings, reviews, and featured freshness.",
                 "items": trending_now,
+            },
+            "featured_products": {
+                "title": "Featured Products",
+                "description": "Curated catalog products marked as featured by the marketplace.",
+                "items": featured_products,
+            },
+            "latest_products": {
+                "title": "Latest Products",
+                "description": "Fresh active products from the current catalog.",
+                "items": latest_products,
             },
         },
     }
@@ -739,41 +929,168 @@ def _approved_vendors():
     return [clean_document(item) for item in vendors_collection().find({"approval_status": "approved"})]
 
 
+def _available_tailors():
+    tailors = [
+        clean_document(item)
+        for item in tailor_profiles_collection().find({"is_available": {"$ne": False}})
+    ]
+    tailors.sort(key=lambda item: (_safe_float(item.get("rating"), 0), _safe_int(item.get("years_of_experience"), 0)), reverse=True)
+    return tailors
+
+
+def _base_chatbot_reply(intent="fallback"):
+    return {
+        "message": "",
+        "reply": "",
+        "products": [],
+        "filters": {},
+        "vendors": [],
+        "tailors": [],
+        "suggested_vendor": None,
+        "suggested_tailor": None,
+        "intent": intent,
+        "actions": [],
+    }
+
+
+def _finalize_chatbot_reply(reply):
+    message = reply.get("message") or reply.get("reply") or "I can help with products, design ideas, customization, vendors, tailors, or order tracking."
+    reply["message"] = message
+    reply["reply"] = message
+    reply["actions"] = list(dict.fromkeys([action for action in reply.get("actions", []) if action]))
+    return reply
+
+
+def _safe_recommend_products_for_chat(preferences=None, limit=4):
+    try:
+        return recommend_products(preferences=preferences or {}, limit=limit)
+    except Exception:
+        return []
+
+
+def _safe_chatbot_product_search(message, limit=6):
+    try:
+        return chatbot_product_search(message, limit=limit)
+    except Exception:
+        return {
+            "message": "I could not reach the live catalog right now, but I can still help narrow your style, budget, size, and customization plan.",
+            "products": [],
+            "filters": {},
+        }
+
+
+def _design_chatbot_reply(message, limit=4):
+    lowered = (message or "").lower()
+    tokens = set(_tokenize(lowered))
+    garment = _detect_design_garment(tokens)
+    style = _detect_design_style(tokens)
+    fit = _detect_design_fit(tokens)
+    neckline = _detect_design_neckline(tokens, garment)
+    colors = _pick_design_colors(tokens)
+    fabric = DESIGN_FABRIC_MAP.get(garment.lower(), DESIGN_FABRIC_MAP["default"])
+    occasion = _extract_keyword(list(tokens), OCCASION_ALIASES) or ("wedding" if "wedding" in tokens else "versatile")
+    category = _extract_keyword(list(tokens), CATEGORY_ALIASES)
+    products = _safe_recommend_products_for_chat({"category": category, "occasion": occasion}, limit=limit)
+    reply = _base_chatbot_reply("design_help")
+    reply["message"] = (
+        f"For a {style.lower()} {garment.lower()} for {occasion}, use {fabric.lower()}, "
+        f"{fit.lower()}, and a {neckline.lower()}. Build the palette around {', '.join(colors[:2]).lower()} "
+        "and keep one clear detail such as subtle embroidery, contrast piping, or a structured cuff."
+    )
+    reply["products"] = products
+    reply["filters"] = {"category": category, "occasion": occasion}
+    reply["actions"] = ["Open tailoring page", "Generate design suggestion", "Recommend a tailor"]
+    return _finalize_chatbot_reply(reply)
+
+
+def _tailor_payload(tailor):
+    if not tailor:
+        return None
+    user_detail = tailor.get("user_detail") or {}
+    return {
+        "id": tailor.get("id") or tailor.get("user"),
+        "user": tailor.get("user"),
+        "full_name": tailor.get("full_name") or user_detail.get("full_name") or user_detail.get("email") or "Slessaa Tailor",
+        "brand_name": tailor.get("full_name") or user_detail.get("full_name") or "Slessaa Tailor",
+        "specialization": tailor.get("specialization") or "Custom tailoring specialist",
+        "location": tailor.get("location_name") or tailor.get("address") or tailor.get("city") or "",
+        "rating": tailor.get("rating"),
+        "years_of_experience": tailor.get("years_of_experience", 0),
+    }
+
+
+def _vendor_payload(vendor):
+    if not vendor:
+        return None
+    return {
+        "id": vendor.get("id") or str(vendor.get("_id", "")),
+        "user": vendor.get("user"),
+        "brand_name": vendor.get("brand_name", "") or "Slessaa Vendor",
+        "slug": vendor.get("slug", ""),
+        "specialization": vendor.get("specialization", ""),
+        "location": vendor.get("location") or vendor.get("address", ""),
+    }
+
+
 def chatbot_assistant_reply(message, user=None, limit=6):
     lowered = (message or "").strip().lower()
-    reply = {"message": "", "products": [], "filters": {}, "vendors": [], "intent": "general", "actions": []}
+    reply = _base_chatbot_reply("general")
+
+    if not lowered or any(term in lowered for term in ["hello", "hi", "hey", "namaste"]):
+        reply["intent"] = "greeting"
+        reply["message"] = "Hi, I can help you choose products, plan a custom design, find a vendor or tailor, estimate measurements, or track an order."
+        reply["actions"] = ["Help me choose a design", "Recommend products", "Help me customize a product", "Track my order"]
+        return _finalize_chatbot_reply(reply)
 
     if any(term in lowered for term in ["track my order", "track order", "where is my order", "order status"]):
         reply["intent"] = "order_tracking"
         if not getattr(user, "is_authenticated", False):
             reply["message"] = "Log in first, then ask me to track your order. I can show your latest order status or help you use the order tracking page."
             reply["actions"] = ["Log in", "Open order tracking"]
-            return reply
-        latest_order = _recent_user_orders(user, limit=1)
+            return _finalize_chatbot_reply(reply)
+        try:
+            latest_order = _recent_user_orders(user, limit=1)
+        except Exception:
+            latest_order = []
         if latest_order:
             order = latest_order[0]
             reply["message"] = f"Your latest order {order.get('order_number', '')} is currently {str(order.get('status', 'pending')).replace('_', ' ')} with payment marked as {order.get('payment_status', 'pending')}."
         else:
             reply["message"] = "I could not find any order yet. You can place one from the cart, then I can help you track it."
         reply["actions"] = ["Track another order", "Open customer dashboard"]
-        return reply
+        return _finalize_chatbot_reply(reply)
 
     if any(term in lowered for term in ["payment", "esewa", "khalti", "refund", "pay"]):
         reply["intent"] = "payment_help"
         reply["message"] = "Slessaa supports cash on delivery plus eSewa and Khalti sandbox payments. If payment verification fails, check the payment page again or contact support with your order number."
         reply["actions"] = ["Checkout help", "Contact support"]
-        return reply
+        return _finalize_chatbot_reply(reply)
+
+    if any(term in lowered for term in ["design", "style help", "what should i wear", "what should i buy", "help me choose", "kurta", "neckline", "fabric", "wedding look", "wedding", "festive"]):
+        return _design_chatbot_reply(message, limit=min(limit, 4))
 
     if any(term in lowered for term in ["customize", "customisation", "customization", "tailor", "measurement", "measurements", "fit estimate"]):
         reply["intent"] = "customization_help"
-        reply["message"] = "For customization, start with a design reference or describe your idea, use the smart measurement assistant to estimate editable measurements, then choose the recommended tailor or let the workflow assign one. The tailor score uses rating, workload, experience, delivery speed, and location where available."
+        if "measure" in lowered or "fit estimate" in lowered:
+            reply["message"] = "For measurements, use the smart measurement assistant with height, weight, body type, fit preference, and standard size. It gives editable chest, waist, hip, shoulder, sleeve, inseam, and neck estimates before submitting a tailoring request."
+        else:
+            reply["message"] = "For customization, choose a product or describe your idea, generate a design brief, estimate measurements, then choose a nearby tailor or let the workflow assign one."
+        try:
+            tailors = [_tailor_payload(item) for item in _available_tailors()[:3]]
+            reply["tailors"] = [item for item in tailors if item]
+            reply["suggested_tailor"] = reply["tailors"][0] if reply["tailors"] else None
+        except Exception:
+            reply["tailors"] = []
         reply["actions"] = ["Open tailoring page", "Estimate my measurements", "Recommend a tailor", "Generate design suggestion"]
-        return reply
+        return _finalize_chatbot_reply(reply)
 
     if any(term in lowered for term in ["vendor", "shop", "seller", "which vendor"]):
         reply["intent"] = "vendor_recommendation"
         extracted = extract_product_keywords(message)
-        vendors = _approved_vendors()
+        try:
+            vendors = _approved_vendors()
+        except Exception:
+            vendors = []
         category_hint = extracted.get("category") or ""
         ranked = []
         for vendor in vendors:
@@ -793,37 +1110,24 @@ def chatbot_assistant_reply(message, user=None, limit=6):
                 score += 10
             ranked.append((score, vendor))
         ranked.sort(key=lambda item: item[0], reverse=True)
-        reply["vendors"] = [
-            {
-                "id": item.get("id") or str(item.get("_id", "")),
-                "user": item.get("user"),
-                "brand_name": item.get("brand_name", ""),
-                "slug": item.get("slug", ""),
-                "specialization": item.get("specialization", ""),
-                "location": item.get("location") or item.get("address", ""),
-            }
-            for _, item in ranked[:3]
-        ]
+        reply["vendors"] = [item for item in (_vendor_payload(item) for _, item in ranked[:3]) if item]
+        reply["suggested_vendor"] = reply["vendors"][0] if reply["vendors"] else None
         if reply["vendors"]:
             reply["message"] = "Here are vendors that look most suitable based on your request and approved shop profiles."
         else:
-            reply["message"] = "I could not match a specific vendor yet. Try mentioning the product type, occasion, or whether you need customization."
+            reply["message"] = "I could not match a specific vendor from live shop profiles right now. Mention a product type, occasion, or customization need, or browse the shop and contact the vendor from a product page."
         reply["actions"] = ["Recommend a vendor", "Show customizable products"]
-        return reply
+        return _finalize_chatbot_reply(reply)
 
-    if any(term in lowered for term in ["design", "choose a design", "style help", "what should i buy", "help me choose", "kurta", "neckline", "fabric", "wedding look"]):
-        reply["intent"] = "design_help"
-        reply["message"] = "Share the occasion, garment type, color mood, and fit preference. For example, 'modern kurta for wedding in ivory'. I can turn that into a structured design brief with style, fabric, color, fit, neckline, and pattern ideas on the tailoring page."
-        reply["actions"] = ["Open tailoring page", "Generate design suggestion", "Recommend festive products", "Recommend a vendor"]
-        return reply
-
-    payload = chatbot_product_search(message, limit=limit)
-    reply["intent"] = "product_search"
+    payload = _safe_chatbot_product_search(message, limit=limit)
+    reply["intent"] = "product_recommendation"
     reply["message"] = payload["message"]
     reply["products"] = payload["products"]
     reply["filters"] = payload.get("filters", {})
-    reply["actions"] = ["Help me customize a product", "Track my order", "Recommend a vendor"]
-    return reply
+    if not reply["products"]:
+        reply["message"] = "I do not have a live product match for that yet. Try a product type like kurta, dress, blazer, jeans, a color, an occasion, or open tailoring for a custom design."
+    reply["actions"] = ["Recommend products", "Help me customize a product", "Track my order", "Recommend a vendor"]
+    return _finalize_chatbot_reply(reply)
 
 
 def _coarse_weather_label(temperature, precipitation):

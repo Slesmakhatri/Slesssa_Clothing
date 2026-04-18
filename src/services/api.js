@@ -1,6 +1,29 @@
 import { storefrontProducts } from '../data/storefront';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+function normalizeApiBaseUrl(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
+  return withoutTrailingSlash.endsWith('/api') ? withoutTrailingSlash : `${withoutTrailingSlash}/api`;
+}
+
+function getDefaultApiBaseUrl() {
+  if (typeof window === 'undefined') {
+    return '/api';
+  }
+
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+
+  const { protocol, hostname } = window.location;
+  const backendProtocol = protocol === 'https:' ? 'https:' : 'http:';
+  return `${backendProtocol}//${hostname}:8000/api`;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
+) || getDefaultApiBaseUrl();
 const ACCESS_TOKEN_KEY = 'slessaa_access_token';
 const REFRESH_TOKEN_KEY = 'slessaa_refresh_token';
 const USER_KEY = 'slessaa_user';
@@ -34,7 +57,9 @@ function extractErrorMessage(payload, fallback = 'Request failed.') {
 
 async function parseResponse(response) {
   const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json') ? await response.json() : null;
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => null)
+    : null;
   const fallback = response.status >= 500
     ? `Server error (${response.status}). Check the backend logs for the full exception.`
     : `Request failed with status ${response.status}.`;
@@ -47,6 +72,13 @@ async function parseResponse(response) {
   }
 
   return payload;
+}
+
+function buildNetworkError() {
+  const error = new Error('Unable to reach Slessaa services. Check that your phone and computer are on the same Wi-Fi, then try again.');
+  error.status = 0;
+  error.payload = { detail: error.message };
+  return error;
 }
 
 export function getAccessToken() {
@@ -108,10 +140,14 @@ async function requestWithToken(path, options = {}, tokenOverride = null) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...fetchOptions,
-    headers
-  });
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      ...fetchOptions,
+      headers
+    });
+  } catch {
+    throw buildNetworkError();
+  }
 }
 
 async function refreshAccessToken() {
@@ -318,6 +354,13 @@ export async function updateVendorProfile(slug, formData) {
   return apiRequest(`/vendors/${slug}/`, {
     method: 'PATCH',
     body: formData
+  });
+}
+
+export async function updateVendorStatus(slug, approvalStatus) {
+  return apiRequest(`/vendors/${slug}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ approval_status: approvalStatus })
   });
 }
 
@@ -658,6 +701,13 @@ export async function listTailorProfiles(params = {}) {
   );
   const payload = await apiRequest(`/tailor-profiles/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
   return unwrapListResponse(payload);
+}
+
+export async function updateTailorProfileStatus(id, approvalStatus) {
+  return apiRequest(`/tailor-profiles/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ approval_status: approvalStatus })
+  });
 }
 
 export async function getTailorRecommendation(payload) {

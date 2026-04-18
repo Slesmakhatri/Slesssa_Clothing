@@ -37,8 +37,7 @@ function firstErrorMessage(value) {
 
 function normalizeOrderErrors(payloadErrors = {}) {
   return {
-    first_name: firstErrorMessage(payloadErrors.first_name),
-    last_name: firstErrorMessage(payloadErrors.last_name),
+    full_name: firstErrorMessage(payloadErrors.full_name) || firstErrorMessage(payloadErrors.first_name) || firstErrorMessage(payloadErrors.last_name),
     email: firstErrorMessage(payloadErrors.email),
     phone: firstErrorMessage(payloadErrors.phone),
     street_address: firstErrorMessage(payloadErrors.shipping_address),
@@ -52,6 +51,13 @@ function normalizeOrderErrors(payloadErrors = {}) {
   };
 }
 
+const paymentMethods = [
+  { value: 'card', label: 'Bank / card', description: 'Pay securely using card or bank payment.' },
+  { value: 'cod', label: 'Cash on delivery', description: 'Pay when your order arrives.' },
+  { value: 'esewa', label: 'eSewa', description: 'Continue through eSewa checkout.' },
+  { value: 'khalti', label: 'Khalti', description: 'Continue through Khalti checkout.' }
+];
+
 function CheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -60,8 +66,7 @@ function CheckoutPage() {
   const shippingFee = 250;
   const total = useMemo(() => subtotal + (items.length ? shippingFee : 0), [subtotal, items.length]);
   const [form, setForm] = useState({
-    first_name: '',
-    last_name: '',
+    full_name: '',
     email: '',
     phone: '',
     street_address: '',
@@ -70,7 +75,8 @@ function CheckoutPage() {
     postal_code: '',
     billing_address: '',
     payment_method: 'cod',
-    delivery_option: 'standard'
+    delivery_option: 'standard',
+    save_info: false
   });
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState({ type: '', message: '' });
@@ -79,11 +85,10 @@ function CheckoutPage() {
 
   useEffect(() => {
     if (!user) return;
-    const names = (user.full_name || '').split(' ');
+    const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(' ');
     setForm((current) => ({
       ...current,
-      first_name: current.first_name || names[0] || user.first_name || '',
-      last_name: current.last_name || names.slice(1).join(' ') || user.last_name || '',
+      full_name: current.full_name || fullName || '',
       email: current.email || user.email || '',
       phone: current.phone || user.phone || ''
     }));
@@ -98,16 +103,15 @@ function CheckoutPage() {
   }, [user]);
 
   function handleChange(event) {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    const { name, type, checked, value } = event.target;
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
     setErrors((current) => ({ ...current, [name]: '' }));
     setStatus({ type: '', message: '' });
   }
 
   function validateForm() {
     const nextErrors = {};
-    if (!form.first_name.trim()) nextErrors.first_name = 'First name is required.';
-    if (!form.last_name.trim()) nextErrors.last_name = 'Last name is required.';
+    if (!form.full_name.trim()) nextErrors.full_name = 'Full name is required.';
     if (!form.email.trim()) nextErrors.email = 'Email is required.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) nextErrors.email = 'Enter a valid email address.';
     if (!form.phone.trim()) nextErrors.phone = 'Phone number is required.';
@@ -129,7 +133,7 @@ function CheckoutPage() {
     }
 
     const payload = {
-      full_name: `${form.first_name.trim()} ${form.last_name.trim()}`.trim(),
+      full_name: form.full_name.trim(),
       phone: normalizeNepalPhone(form.phone),
       email: form.email.trim().toLowerCase(),
       shipping_address: form.street_address.trim(),
@@ -198,18 +202,103 @@ function CheckoutPage() {
 
   return (
     <>
-      <section className="page-hero compact-hero">
+      <section className="checkout-top-area">
         <div className="container">
-          <span className="section-eyebrow">Checkout</span>
-          <h1>Complete your order with a clean premium payment flow</h1>
-          <p>Designed to connect later with real payment and order services without reworking the UI.</p>
+          <nav className="checkout-breadcrumb" aria-label="Breadcrumb">
+            <Link to="/">Home</Link>
+            <span>/</span>
+            <Link to="/cart">Cart</Link>
+            <span>/</span>
+            <span>Checkout</span>
+          </nav>
+          <h1>Billing Details</h1>
         </div>
       </section>
 
-      <section className="section-space">
+      <section className="section-space billing-checkout-section">
         <div className="container">
-          <form className="row g-4" onSubmit={handleSubmit} noValidate>
-            <div className="col-lg-8">
+          <form className="row g-4 billing-shell" onSubmit={handleSubmit} noValidate>
+            <div className="col-lg-5">
+              <aside className="billing-summary-card sticky-summary">
+                <div className="billing-card-head">
+                  <span>Order Summary</span>
+                  <strong>{items.length} {items.length === 1 ? 'item' : 'items'}</strong>
+                </div>
+
+                <div className="billing-items">
+                  {items.length ? (
+                    items.map((item) => (
+                      <article key={`${item.backendId || item.productId}-${item.size}-${item.color}`} className="billing-item">
+                        <img src={item.image} alt={item.title} />
+                        <div className="billing-item-body">
+                          <h2>{item.title}</h2>
+                          <p>
+                            Qty {item.quantity}
+                            {item.size ? ` | Size ${item.size}` : ''}
+                            {item.color ? ` | ${item.color}` : ''}
+                          </p>
+                          {item.vendorName ? <small>by {item.vendorName}</small> : null}
+                        </div>
+                        <strong>NPR {(item.price * item.quantity).toLocaleString()}</strong>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="billing-empty-state">
+                      <strong>Your cart is empty</strong>
+                      <Link to="/shop">Shop products</Link>
+                    </div>
+                  )}
+                </div>
+
+                <div className="billing-totals">
+                  <div><span>Subtotal</span><strong>NPR {subtotal.toLocaleString()}</strong></div>
+                  <div><span>Shipping</span><strong>NPR {(items.length ? shippingFee : 0).toLocaleString()}</strong></div>
+                  <div className="billing-total-row"><span>Total</span><strong>NPR {total.toLocaleString()}</strong></div>
+                </div>
+
+                <div className="billing-payment-block">
+                  <h2>Payment Method</h2>
+                  <div className="billing-payment-options">
+                    {paymentMethods.map((method) => (
+                      <label key={method.value} className={`billing-payment-option ${form.payment_method === method.value ? 'is-selected' : ''}`}>
+                        <input type="radio" name="payment_method" value={method.value} checked={form.payment_method === method.value} onChange={handleChange} />
+                        <span>
+                          <strong>{method.label}</strong>
+                          <small>{method.description}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {errors.payment_method && <div className="invalid-feedback d-block">{errors.payment_method}</div>}
+                  {form.payment_method === 'khalti' && (
+                    <div className={`alert mt-3 mb-0 ${khaltiPublicKey ? 'alert-success' : 'alert-warning'}`} role="alert">
+                      {khaltiPublicKey
+                        ? 'Khalti live public key is configured for checkout.'
+                        : 'Khalti public key is missing. Add VITE_KHALTI_PUBLIC_KEY to enable Khalti checkout.'}
+                    </div>
+                  )}
+                </div>
+
+                {vouchers.length ? (
+                  <div className="alert alert-info mt-3 mb-0">
+                    Voucher balance available: NPR {vouchers.reduce((sum, item) => sum + Number(item.balance || 0), 0).toLocaleString()}.
+                  </div>
+                ) : null}
+                {errors.items && <div className="alert alert-warning mt-3 mb-0">{errors.items}</div>}
+                {errors.form && <div className="alert alert-danger mt-3 mb-0">{errors.form}</div>}
+
+                <button type="submit" className="btn btn-slessaa btn-slessaa-primary w-100 mt-4" disabled={submitting || !items.length}>
+                  {submitting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                      Placing Order...
+                    </>
+                  ) : 'Place Order'}
+                </button>
+              </aside>
+            </div>
+
+            <div className="col-lg-7">
               {status.message && (
                 <div className={`alert ${status.type === 'success' ? 'alert-success' : 'alert-danger'}`} role="alert">
                   {status.message}
@@ -220,117 +309,68 @@ function CheckoutPage() {
                   {errors.auth} <Link to="/login">Go to login</Link>
                 </div>
               )}
-              <div className="checkout-card mb-4">
-                <h4>Billing Details</h4>
-                <div className="row g-3">
-                  <div className="col-md-6">
-                    <label className="premium-label">First Name</label>
-                    <input className={`form-control premium-input ${errors.first_name ? 'is-invalid' : ''}`} name="first_name" value={form.first_name} onChange={handleChange} placeholder="Aarohi" />
-                    {errors.first_name && <div className="invalid-feedback d-block">{errors.first_name}</div>}
-                  </div>
-                  <div className="col-md-6">
-                    <label className="premium-label">Last Name</label>
-                    <input className={`form-control premium-input ${errors.last_name ? 'is-invalid' : ''}`} name="last_name" value={form.last_name} onChange={handleChange} placeholder="Shrestha" />
-                    {errors.last_name && <div className="invalid-feedback d-block">{errors.last_name}</div>}
-                  </div>
-                  <div className="col-md-6">
-                    <label className="premium-label">Email</label>
-                    <input className={`form-control premium-input ${errors.email ? 'is-invalid' : ''}`} type="email" name="email" value={form.email} onChange={handleChange} placeholder="hello@example.com" />
-                    {errors.email && <div className="invalid-feedback d-block">{errors.email}</div>}
-                  </div>
-                  <div className="col-md-6">
-                    <label className="premium-label">Phone</label>
-                    <input className={`form-control premium-input ${errors.phone ? 'is-invalid' : ''}`} name="phone" value={form.phone} onChange={handleChange} placeholder="9804000000 or +9779804000000" />
-                    {errors.phone && <div className="invalid-feedback d-block">{errors.phone}</div>}
-                  </div>
+              <div className="billing-details-card">
+                <div className="billing-card-title">
+                  <span>Checkout</span>
+                  <h2>Billing Details</h2>
                 </div>
-              </div>
-              <div className="checkout-card mb-4">
-                <h4>Shipping Address</h4>
-                <div className="row g-3">
+                <div className="row g-3 g-md-4">
+                  <div className="col-12">
+                    <label className="premium-label">Full Name</label>
+                    <input className={`form-control premium-input ${errors.full_name ? 'is-invalid' : ''}`} name="full_name" value={form.full_name} onChange={handleChange} placeholder="Aarohi Shrestha" />
+                    {errors.full_name && <div className="invalid-feedback d-block">{errors.full_name}</div>}
+                  </div>
+                  <div className="col-md-6">
+                    <label className="premium-label">Delivery District</label>
+                    <input className={`form-control premium-input ${errors.province ? 'is-invalid' : ''}`} name="province" value={form.province} onChange={handleChange} placeholder="Bagmati" />
+                    {errors.province && <div className="invalid-feedback d-block">{errors.province}</div>}
+                  </div>
+                  <div className="col-md-6">
+                    <label className="premium-label">Town/City</label>
+                    <input className={`form-control premium-input ${errors.city ? 'is-invalid' : ''}`} name="city" value={form.city} onChange={handleChange} placeholder="Kathmandu" />
+                    {errors.city && <div className="invalid-feedback d-block">{errors.city}</div>}
+                  </div>
                   <div className="col-12">
                     <label className="premium-label">Street Address</label>
                     <input className={`form-control premium-input ${errors.street_address ? 'is-invalid' : ''}`} name="street_address" value={form.street_address} onChange={handleChange} placeholder="Bhanimandal, Lalitpur" />
                     {errors.street_address && <div className="invalid-feedback d-block">{errors.street_address}</div>}
                   </div>
-                  <div className="col-md-4">
-                    <label className="premium-label">City</label>
-                    <input className={`form-control premium-input ${errors.city ? 'is-invalid' : ''}`} name="city" value={form.city} onChange={handleChange} placeholder="Kathmandu" />
-                    {errors.city && <div className="invalid-feedback d-block">{errors.city}</div>}
+                  <div className="col-12">
+                    <label className="premium-label">Apartment, floor, etc. <span>(optional)</span></label>
+                    <input className={`form-control premium-input ${errors.billing_address ? 'is-invalid' : ''}`} name="billing_address" value={form.billing_address} onChange={handleChange} placeholder="Apartment, suite, floor, landmark" />
+                    {errors.billing_address && <div className="invalid-feedback d-block">{errors.billing_address}</div>}
+                  </div>
+                  <div className="col-md-6">
+                    <label className="premium-label">Phone Number</label>
+                    <input className={`form-control premium-input ${errors.phone ? 'is-invalid' : ''}`} name="phone" value={form.phone} onChange={handleChange} placeholder="9804000000" />
+                    {errors.phone && <div className="invalid-feedback d-block">{errors.phone}</div>}
                   </div>
                   <div className="col-md-4">
-                    <label className="premium-label">Province</label>
-                    <input className="form-control premium-input" name="province" value={form.province} onChange={handleChange} placeholder="Bagmati" />
+                    <label className="premium-label">Postal Code <span>(optional)</span></label>
+                    <input className={`form-control premium-input ${errors.postal_code ? 'is-invalid' : ''}`} name="postal_code" value={form.postal_code} onChange={handleChange} placeholder="44600" />
+                    {errors.postal_code && <div className="invalid-feedback d-block">{errors.postal_code}</div>}
                   </div>
-                  <div className="col-md-4">
-                    <label className="premium-label">Postal Code</label>
-                    <input className="form-control premium-input" name="postal_code" value={form.postal_code} onChange={handleChange} placeholder="44600" />
+                  <div className="col-md-8">
+                    <label className="premium-label">Email Address</label>
+                    <input className={`form-control premium-input ${errors.email ? 'is-invalid' : ''}`} type="email" name="email" value={form.email} onChange={handleChange} placeholder="hello@example.com" />
+                    {errors.email && <div className="invalid-feedback d-block">{errors.email}</div>}
                   </div>
                   <div className="col-12">
-                    <label className="premium-label">Billing Address</label>
-                    <input className="form-control premium-input" name="billing_address" value={form.billing_address} onChange={handleChange} placeholder="Same as shipping or alternate billing address" />
+                    <label className="premium-label">Delivery Option</label>
+                    <select className="form-select premium-input" name="delivery_option" value={form.delivery_option} onChange={handleChange}>
+                      <option value="standard">Standard Delivery (3-5 days)</option>
+                      <option value="express">Express Delivery (1-2 days)</option>
+                      <option value="pickup">Studio Pickup</option>
+                    </select>
                   </div>
-                </div>
-              </div>
-              <div className="checkout-card">
-                <h4>Payment & Delivery</h4>
-                <div className="payment-options">
-                  {[
-                    { value: 'esewa', label: 'eSewa' },
-                    { value: 'khalti', label: 'Khalti' },
-                    { value: 'cod', label: 'Cash on Delivery' },
-                    { value: 'card', label: 'Card Payment' }
-                  ].map((method) => (
-                    <label key={method.value} className="payment-option">
-                      <input type="radio" name="payment_method" value={method.value} checked={form.payment_method === method.value} onChange={handleChange} /> {method.label}
+                  <div className="col-12">
+                    <label className="billing-save-info">
+                      <input type="checkbox" name="save_info" checked={form.save_info} onChange={handleChange} />
+                      <span>Save this information for faster check-out next time</span>
                     </label>
-                  ))}
-                </div>
-                {errors.payment_method && <div className="invalid-feedback d-block">{errors.payment_method}</div>}
-                {form.payment_method === 'khalti' && (
-                  <div className={`alert mt-3 mb-0 ${khaltiPublicKey ? 'alert-success' : 'alert-warning'}`} role="alert">
-                    {khaltiPublicKey
-                      ? 'Khalti live public key is configured for checkout.'
-                      : 'Khalti public key is missing. Add VITE_KHALTI_PUBLIC_KEY to enable Khalti checkout.'}
                   </div>
-                )}
-                <div className="mt-4">
-                  <label className="premium-label">Delivery Option</label>
-                  <select className="form-select premium-input" name="delivery_option" value={form.delivery_option} onChange={handleChange}>
-                    <option value="standard">Standard Delivery (3-5 days)</option>
-                    <option value="express">Express Delivery (1-2 days)</option>
-                    <option value="pickup">Studio Pickup</option>
-                  </select>
                 </div>
               </div>
-            </div>
-            <div className="col-lg-4">
-              <aside className="summary-card sticky-summary">
-                <h4>Order Summary</h4>
-                <div className="summary-list-block">
-                  {items.map((item) => (
-                    <div key={`${item.backendId || item.productId}-${item.size}-${item.color}`}><span>{item.title} <small className="summary-vendor-label">by {item.vendorName}</small></span><strong>NPR {(item.price * item.quantity).toLocaleString()}</strong></div>
-                  ))}
-                  <div><span>Shipping</span><strong>NPR {(items.length ? shippingFee : 0).toLocaleString()}</strong></div>
-                  <div><span>Total</span><strong>NPR {total.toLocaleString()}</strong></div>
-                </div>
-                {vouchers.length ? (
-                  <div className="alert alert-info mt-3 mb-0">
-                    Voucher balance available: NPR {vouchers.reduce((sum, item) => sum + Number(item.balance || 0), 0).toLocaleString()}.
-                    Redemption is stored and tracked now, and can be connected into checkout in the next phase.
-                  </div>
-                ) : null}
-                {errors.items && <div className="alert alert-warning mt-3 mb-0">{errors.items}</div>}
-                {errors.form && <div className="alert alert-danger mt-3 mb-0">{errors.form}</div>}
-                <button type="submit" className="btn btn-slessaa btn-slessaa-primary w-100 mt-4" disabled={submitting || !items.length}>
-                  {submitting ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-                      Placing Order...
-                    </>
-                  ) : 'Place Order'}
-                </button>
-              </aside>
             </div>
           </form>
         </div>

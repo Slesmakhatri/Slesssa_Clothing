@@ -147,6 +147,7 @@ def ensure_tailor_profile_for_user(user, defaults=None):
         "rating": defaults.get("rating"),
         "profile_image": defaults.get("profile_image", ""),
         "is_available": defaults.get("is_available", True),
+        "approval_status": defaults.get("approval_status", "pending"),
         "location_name": defaults.get("location_name", seeded_location["location_name"]),
         "address": defaults.get("address", seeded_location["address"]),
         "city": defaults.get("city", seeded_location["city"]),
@@ -376,7 +377,7 @@ def list_tailor_profiles(user, params=None):
         return [profile for profile in profiles if profile.get("vendor_detail", {}).get("user") == user.id or profile.get("vendor") is None]
     if user.role == "tailor":
         return [profile for profile in profiles if profile.get("user") == user.id]
-    return [profile for profile in profiles if profile.get("is_available")]
+    return [profile for profile in profiles if profile.get("is_available") and profile.get("approval_status", "pending") == "approved"]
 
 
 def get_tailor_profile_for_user(user, profile_id):
@@ -388,6 +389,37 @@ def get_tailor_profile_for_user(user, profile_id):
         if profile["id"] == profile_id:
             return profile
     return None
+
+
+def update_tailor_profile(user, profile_id, data):
+    profile = get_tailor_profile_for_user(user, profile_id)
+    if not profile or user.role not in {"admin", "super_admin"}:
+        return None
+    updates = {
+        key: data[key]
+        for key in (
+            "full_name",
+            "years_of_experience",
+            "specialization",
+            "design_capabilities",
+            "style_categories",
+            "supported_clothing_types",
+            "short_bio",
+            "rating",
+            "profile_image",
+            "is_available",
+            "approval_status",
+            "location_name",
+            "address",
+            "city",
+            "latitude",
+            "longitude",
+        )
+        if key in data
+    }
+    if updates:
+        tailor_profiles_collection().update_one({"id": profile["id"]}, {"$set": prepare_document_for_mongo(updates)})
+    return get_tailor_profile_for_user(user, profile["id"])
 
 
 def _message_entry(request_document, sender, data):

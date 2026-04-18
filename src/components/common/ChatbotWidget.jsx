@@ -41,57 +41,75 @@ function productMatchesPrompt(product, prompt) {
 function buildLocalFallbackReply(message, error) {
   const lowered = message.toLowerCase();
   const products = storefrontProducts.filter((product) => productMatchesPrompt(product, message)).slice(0, 4);
-  const unavailableHint = error?.status >= 500
-    ? 'Live assistant is temporarily unavailable, so I am using the local catalog.'
-    : 'I am using the local catalog because live assistant data was not available.';
 
   if (lowered.includes('track') && lowered.includes('order')) {
     return {
-      text: `${unavailableHint} You can still open order tracking and enter your order number there.`,
+      text: 'Open order tracking and enter your order number. If you are logged in, I can usually summarize the latest order status from your account.',
       products: [],
       filters: {},
       vendors: [],
+      tailors: [],
       actions: ['Open order tracking']
     };
   }
 
   if (lowered.includes('custom') || lowered.includes('tailor') || lowered.includes('measure')) {
     return {
-      text: `${unavailableHint} Start on the tailoring page, describe your design, estimate measurements, then select a recommended tailor.`,
+      text: 'Start on the tailoring page, describe your design, estimate measurements, then select a recommended tailor or submit without choosing one.',
       products,
       filters: {},
       vendors: [],
+      tailors: [],
       actions: ['Open tailoring page', 'Generate design suggestion']
     };
   }
 
   if (lowered.includes('vendor') || lowered.includes('seller') || lowered.includes('shop')) {
     return {
-      text: `${unavailableHint} For now, open a product or contact support so your message can be routed to the right vendor.`,
+      text: 'Open a product and use the vendor contact controls, or contact support with the product type and occasion so the request can be routed.',
       products,
       filters: {},
       vendors: [],
+      tailors: [],
       actions: ['Browse best sellers', 'Contact support']
     };
   }
 
   if (lowered.includes('design') || lowered.includes('style') || lowered.includes('wedding') || lowered.includes('kurta')) {
     return {
-      text: `${unavailableHint} Tell the tailoring page your garment, occasion, color mood, fit, and neckline preference to generate a structured design suggestion.`,
+      text: 'For a custom look, share garment type, occasion, color mood, fit, and neckline preference. A modern wedding kurta works well with a cotton-silk blend, regular made-to-measure fit, and a mandarin collar.',
       products,
       filters: {},
       vendors: [],
+      tailors: [],
       actions: ['Open tailoring page', 'Recommend festive products']
     };
   }
 
   return {
-    text: `${unavailableHint} Here are local catalog matches while the live assistant recovers.`,
+    text: 'Try asking for a product type, color, occasion, customization flow, vendor, tailor, measurements, or order tracking.',
     products,
     filters: {},
     vendors: [],
+    tailors: [],
     actions: ['Help me customize a product', 'Browse best sellers']
   };
+}
+
+function normalizeBotPayload(payload = {}) {
+  return {
+    text: payload.reply || payload.message || 'I can help with products, customization, vendors, tailors, measurements, or order tracking.',
+    products: Array.isArray(payload.products) ? payload.products : [],
+    filters: payload.filters || {},
+    vendors: Array.isArray(payload.vendors) ? payload.vendors : [],
+    tailors: Array.isArray(payload.tailors) ? payload.tailors : [],
+    intent: payload.intent || 'general',
+    actions: uniqueActions(payload.actions || [])
+  };
+}
+
+function directoryName(item) {
+  return item.brand_name || item.full_name || item.name || 'Slessaa partner';
 }
 
 function ChatbotWidget() {
@@ -133,16 +151,13 @@ function ChatbotWidget() {
 
     try {
       const payload = await sendChatbotMessage(message);
+      const botPayload = normalizeBotPayload(payload);
       setMessages((current) => [
         ...current,
         {
           id: `bot-${Date.now()}`,
           sender: 'bot',
-          text: payload.message || 'Here are some matching products.',
-          products: payload.products || [],
-          filters: payload.filters || {},
-          vendors: payload.vendors || [],
-          actions: payload.actions || []
+          ...botPayload
         }
       ]);
     } catch (error) {
@@ -158,6 +173,7 @@ function ChatbotWidget() {
           products: fallback.products || [],
           filters: fallback.filters || {},
           vendors: fallback.vendors || [],
+          tailors: fallback.tailors || [],
           actions: fallback.actions || []
         }
       ]);
@@ -184,6 +200,11 @@ function ChatbotWidget() {
     if (lowered.includes('best seller')) {
       setOpen(false);
       navigate('/shop?curated=Best%20Seller');
+      return;
+    }
+    if (lowered.includes('customizable product')) {
+      setOpen(false);
+      navigate('/shop?search=customizable');
       return;
     }
     if (lowered.includes('tailoring') || lowered.includes('measure') || lowered.includes('tailor') || lowered.includes('design suggestion') || lowered.includes('customize')) {
@@ -235,7 +256,7 @@ function ChatbotWidget() {
                 {message.sender === 'bot' && message.products?.length ? (
                   <div className="chat-product-grid">
                     {message.products.slice(0, 4).map((product) => (
-                      <Link key={product.id} to={`/shop/${product.slug || product.id}`} className="chat-product-card" onClick={() => setOpen(false)}>
+                      <Link key={product.slug || product.id} to={`/shop/${product.slug || product.id}`} className="chat-product-card" onClick={() => setOpen(false)}>
                         <img src={getProductImage(product)} alt={product.title || product.name} />
                         <div>
                           <strong>{product.title || product.name}</strong>
@@ -246,21 +267,21 @@ function ChatbotWidget() {
                     ))}
                   </div>
                 ) : null}
-                {message.sender === 'bot' && message.vendors?.length ? (
+                {message.sender === 'bot' && (message.vendors?.length || message.tailors?.length) ? (
                   <div className="chat-vendor-grid">
-                    {message.vendors.map((vendor) => (
+                    {[...(message.vendors || []), ...(message.tailors || [])].map((vendor) => (
                       <Link
                         key={vendor.id}
                         to="/contact"
                         state={{
-                          vendorName: vendor.brand_name,
+                          vendorName: directoryName(vendor),
                           vendorUserId: vendor.user || vendor.user_id || null
                         }}
                         className="chat-vendor-card"
                         onClick={() => setOpen(false)}
                       >
-                        <strong>{vendor.brand_name}</strong>
-                        <span>{vendor.specialization || 'Fashion vendor'}</span>
+                        <strong>{directoryName(vendor)}</strong>
+                        <span>{vendor.specialization || 'Fashion partner'}</span>
                         <small>{vendor.location || 'Location not listed'}</small>
                       </Link>
                     ))}

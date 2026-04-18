@@ -89,6 +89,7 @@ class TailorProfileSerializer(serializers.Serializer):
     rating = serializers.DecimalField(max_digits=3, decimal_places=1, required=False, allow_null=True)
     profile_image = serializers.CharField(required=False, allow_blank=True)
     is_available = serializers.BooleanField(required=False)
+    approval_status = serializers.ChoiceField(choices=["pending", "approved", "rejected"], required=False)
     location_name = serializers.CharField(required=False, allow_blank=True)
     address = serializers.CharField(required=False, allow_blank=True)
     city = serializers.CharField(required=False, allow_blank=True)

@@ -311,22 +311,11 @@ function Navbar({
             </Link>
 
             <div className="navbar-mobile-actions">
-              <button type="button" className="tool-icon mobile-cart-icon border-0" aria-label="Notifications" onClick={() => setNotificationsOpen((value) => !value)}>
-                <i className="bi bi-bell"></i>
-                <span className="tool-badge">{unreadCount}</span>
-              </button>
-              {renderAccountTools('mobileBar')}
               {showCustomerTools ? (
-                <>
-                  <Link to="/wishlist" className="tool-icon mobile-cart-icon" aria-label="Wishlist" onClick={closeMenu}>
-                    <i className="bi bi-heart"></i>
-                    <span className="tool-badge">{wishlistCount}</span>
-                  </Link>
-                  <Link to="/cart" className="tool-icon mobile-cart-icon" aria-label="Cart" onClick={closeMenu}>
-                    <i className="bi bi-bag"></i>
-                    <span className="tool-badge">{cartCount}</span>
-                  </Link>
-                </>
+                <Link to="/cart" className="tool-icon mobile-cart-icon" aria-label="Cart" onClick={closeMenu}>
+                  <i className="bi bi-bag"></i>
+                  <span className="tool-badge">{cartCount}</span>
+                </Link>
               ) : null}
               <button
                 className={`navbar-toggle ${open ? 'active' : ''}`}
@@ -361,7 +350,27 @@ function Navbar({
               ))}
             </ul>
             <div className="navbar-mobile-tools">
+              <button
+                type="button"
+                className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn"
+                onClick={() => setNotificationsOpen((value) => !value)}
+              >
+                <i className="bi bi-bell me-2"></i>
+                Notifications {unreadCount ? `(${unreadCount})` : ''}
+              </button>
               {renderAccountTools('mobilePanel')}
+              {showCustomerTools ? (
+                <>
+                  <Link to="/wishlist" className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
+                    <i className="bi bi-heart me-2"></i>
+                    Wishlist {wishlistCount ? `(${wishlistCount})` : ''}
+                  </Link>
+                  <Link to="/cart" className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
+                    <i className="bi bi-bag me-2"></i>
+                    Cart {cartCount ? `(${cartCount})` : ''}
+                  </Link>
+                </>
+              ) : null}
               {canInstall ? (
                 <button type="button" className="btn btn-slessaa btn-slessaa-outline navbar-install-btn" onClick={onInstallApp}>
                   <i className="bi bi-download me-2"></i>

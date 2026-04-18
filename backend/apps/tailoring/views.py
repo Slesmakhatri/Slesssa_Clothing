@@ -1,7 +1,7 @@
 from rest_framework import permissions, status, views, viewsets
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsTailorVendorOrAdmin
+from apps.accounts.permissions import IsAdminRole, IsTailorVendorOrAdmin
 from common.storage import store_uploaded_file
 
 from .repository import (
@@ -17,6 +17,7 @@ from .repository import (
     list_tailoring_messages,
     list_tailoring_requests,
     suggest_measurements_for_profile,
+    update_tailor_profile,
     update_tailoring_request,
 )
 from .serializers import (
@@ -71,6 +72,11 @@ class TailorProfileViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
+    def get_permissions(self):
+        if self.action in ["update", "partial_update"]:
+            return [permissions.IsAuthenticated(), IsAdminRole()]
+        return [permissions.IsAuthenticated()]
+
     def list(self, request):
         return Response(TailorProfileSerializer(list_tailor_profiles(request.user, request.query_params), many=True).data)
 
@@ -79,6 +85,17 @@ class TailorProfileViewSet(viewsets.ViewSet):
         if not profile:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(TailorProfileSerializer(profile).data)
+
+    def partial_update(self, request, pk=None):
+        serializer = TailorProfileSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        profile = update_tailor_profile(request.user, pk, serializer.validated_data)
+        if not profile:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(TailorProfileSerializer(profile).data)
+
+    def update(self, request, pk=None):
+        return self.partial_update(request, pk=pk)
 
 
 class TailorRecommendationViewSet(viewsets.ViewSet):

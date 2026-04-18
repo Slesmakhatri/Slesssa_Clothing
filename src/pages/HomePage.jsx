@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import AiRecommendationSection from '../components/common/AiRecommendationSection';
-import RecommendationSections from '../components/common/RecommendationSections';
 import { Link } from 'react-router-dom';
 import QuickViewModal from '../components/common/QuickViewModal';
-import ProductCard from '../components/shop/ProductCard';
+import ProductSection from '../components/common/ProductSection';
 import {
   storefrontHero,
   storefrontProducts
@@ -47,11 +45,11 @@ function HomePage() {
       .finally(() => setRecommendationLoading(false));
   }, []);
 
-  const customizationIdeas = useMemo(
+  const tailoringProducts = useMemo(
     () =>
       collections.catalog
         .filter((item) => ['Dresses', 'Kurtas', 'Blazers'].includes(item.category))
-        .slice(0, 3),
+        .slice(0, 4),
     [collections.catalog]
   );
   const bestSellerProducts = useMemo(
@@ -61,6 +59,22 @@ function HomePage() {
   const homepageRecommendationSections = useMemo(
     () => buildHomepageRecommendationFallback(recommendationSections, collections),
     [collections, recommendationSections]
+  );
+  const featuredProducts = useMemo(
+    () => (collections.recommended?.length ? collections.recommended : collections.catalog).slice(0, 4),
+    [collections.catalog, collections.recommended]
+  );
+  const newArrivalProducts = useMemo(
+    () => (collections.newIn?.length ? collections.newIn : collections.catalog).slice(0, 4),
+    [collections.catalog, collections.newIn]
+  );
+  const recommendedForYouProducts = useMemo(
+    () => (homepageRecommendationSections.recommended_for_you?.items || []).slice(0, 4),
+    [homepageRecommendationSections]
+  );
+  const trendingNowProducts = useMemo(
+    () => (homepageRecommendationSections.trending_now?.items || []).slice(0, 4),
+    [homepageRecommendationSections]
   );
 
   return (
@@ -100,124 +114,63 @@ function HomePage() {
       </section>
 
       <div className="homepage-main-flow">
-        <section className="section-space homepage-section homepage-product-section">
-          <div className="container">
-            <div className="section-title">
-              <span className="section-eyebrow">Featured Products</span>
-              <h2>Clean product discovery without extra category clutter.</h2>
-              <p>Browse a tighter edit of premium pieces with direct purchase and customization actions.</p>
-            </div>
+        <ProductSection
+          eyebrow="Featured Products"
+          title="Clean product discovery without extra category clutter."
+          text="Browse a tighter edit of premium pieces with direct purchase and customization actions."
+          products={featuredProducts}
+          fallbackProducts={collections.catalog}
+          onQuickView={setSelectedProduct}
+          className="homepage-product-section"
+        />
 
-            <div className="shop-product-grid">
-              {collections.recommended.slice(0, 4).map((product) => (
-                <div key={product.slug}>
-                  <ProductCard product={product} onQuickView={setSelectedProduct} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <ProductSection
+          eyebrow="New Arrivals"
+          title="Fresh drops across denim, tailoring, and festive dressing."
+          text="New catalog pieces using the same card layout as every other product shelf."
+          products={newArrivalProducts}
+          fallbackProducts={collections.catalog}
+          action={{ to: '/shop?curated=New%20Arrivals', label: 'Explore New Arrivals' }}
+          onQuickView={setSelectedProduct}
+        />
 
-        <section className="section-space bg-soft homepage-section">
-          <div className="container">
-            <div className="section-title">
-              <span className="section-eyebrow">New Arrivals</span>
-              <h2>Fresh drops across denim, tailoring, and festive dressing.</h2>
-              <p>
-                This section stays connected to the same product records used in shop results, quick view, details, and
-                the cart.
-              </p>
-            </div>
+        <ProductSection
+          eyebrow="Tailoring Picks"
+          title="Made to your taste, fit, and occasion."
+          text="Start from a product idea, then customize the details through tailoring."
+          products={tailoringProducts}
+          fallbackProducts={collections.catalog}
+          action={{ to: '/tailoring', label: 'Start Customization' }}
+          onQuickView={setSelectedProduct}
+        />
 
-            <div className="homepage-two-column">
-              <div className="editorial-panel">
-                <Link to="/shop?curated=New%20Arrivals" className="btn btn-slessaa btn-slessaa-outline">
-                  Explore New Arrivals
-                </Link>
-              </div>
+        <ProductSection
+          eyebrow="Best Sellers"
+          title="High-conviction styles with cleaner product presentation."
+          text="Large clothing images, stable spacing, quick actions, and a simpler premium visual rhythm."
+          products={bestSellerProducts}
+          fallbackProducts={collections.trending || collections.catalog}
+          onQuickView={setSelectedProduct}
+        />
 
-              <div className="stacked-product-list">
-                {collections.newIn.slice(0, 3).map((product) => (
-                  <Link key={product.slug} to={`/shop/${product.slug}`} className="stacked-product-item">
-                    <img src={product.image} alt={product.name} />
-                    <div>
-                      <span>{product.category}</span>
-                      <strong>{product.name}</strong>
-                      <small>NPR {product.price.toLocaleString()}</small>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+        <ProductSection
+          eyebrow="Recommended for You"
+          title="Personalized picks from catalog and shopping signals."
+          text={homepageRecommendationSections.recommended_for_you?.description || 'Fallback products keep this shelf filled for new users.'}
+          products={recommendedForYouProducts}
+          fallbackProducts={featuredProducts}
+          loading={recommendationLoading}
+          onQuickView={setSelectedProduct}
+        />
 
-        <section className="section-space homepage-section">
-          <div className="container">
-            <div className="custom-home-cta">
-              <div className="section-title">
-                <span className="section-eyebrow">Customize For You</span>
-                <h2>Made to your taste, fit, and occasion.</h2>
-                <p>Choose a design you love, personalize the details, and send a premium customization request in a few steps.</p>
-                <Link to="/tailoring" className="btn btn-slessaa btn-slessaa-primary">
-                  Start Customization
-                </Link>
-              </div>
-
-              <div className="custom-home-grid">
-                {customizationIdeas.map((product) => (
-                  <Link key={product.slug} to="/tailoring" state={{ referenceProduct: product }} className="custom-home-card">
-                    <img src={product.image} alt={product.name} />
-                    <div>
-                      <span>{product.category}</span>
-                      <strong>{product.name}</strong>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section-space bg-soft homepage-section">
-          <div className="container">
-            <div className="section-title">
-              <span className="section-eyebrow">Best Sellers</span>
-              <h2>High-conviction styles with cleaner product presentation.</h2>
-              <p>Large clothing images, stable spacing, quick actions, and a simpler premium visual rhythm.</p>
-            </div>
-            <div className="shop-product-grid best-seller-product-grid">
-              {bestSellerProducts.map((product) => (
-                <div key={product.slug}>
-                  <ProductCard product={product} onQuickView={setSelectedProduct} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="section-space bg-soft homepage-section homepage-recommendation-section">
-          <div className="container">
-            <div className="section-title">
-              <span className="section-eyebrow">Advanced Recommendations</span>
-              <h2>Recommended for you and trending now</h2>
-              <p>This section combines browsing, cart/order behavior, and trending catalog signals with a clean fallback for new users.</p>
-            </div>
-            <RecommendationSections
-              sections={homepageRecommendationSections}
-              loading={recommendationLoading}
-              sectionOrder={['recommended_for_you', 'trending_now']}
-              emptyCopy="Recommendations will appear here after the catalog is ranked."
-              onQuickView={setSelectedProduct}
-            />
-          </div>
-        </section>
-
-        <AiRecommendationSection
-          eyebrow="AI For You"
-          title="Smart recommendations from recent products and shopper signals"
-          text="This legacy quick shelf still uses the upgraded backend ranking while keeping the original UI intact."
-          preferences={{ occasion: 'casual' }}
+        <ProductSection
+          eyebrow="Trending Now"
+          title="Popular styles from the current Slessaa catalog."
+          text={homepageRecommendationSections.trending_now?.description || 'Trending catalog products with the same stable ecommerce grid.'}
+          products={trendingNowProducts}
+          fallbackProducts={bestSellerProducts}
+          loading={recommendationLoading}
+          onQuickView={setSelectedProduct}
         />
       </div>
 

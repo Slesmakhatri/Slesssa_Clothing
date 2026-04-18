@@ -5,8 +5,8 @@ import { useWishlist } from '../../context/WishlistContext';
 import {
   DEFAULT_PRODUCT_IMAGE,
   getCategoryFallbackImage,
+  getProductDetailPath,
   getProductHoverImage,
-  getProductIdentifier,
   getProductImage,
   getProductOldPrice,
   getProductPrice,
@@ -19,7 +19,7 @@ function ProductCard({ product, onQuickView }) {
   const { addItem } = useCart();
   const { isSaved, toggleWishlist } = useWishlist();
   const navigate = useNavigate();
-  const productPath = getProductIdentifier(product);
+  const productDetailPath = getProductDetailPath(product);
   const productImage = getProductImage(product);
   const hoverImage = getProductHoverImage(product);
   const [primaryImage, setPrimaryImage] = useState(productImage);
@@ -42,7 +42,28 @@ function ProductCard({ product, onQuickView }) {
     setSecondaryImage(hoverImage);
   }, [hoverImage, productImage]);
 
-  async function handleBuyNow() {
+  function isInteractiveCardTarget(target) {
+    return Boolean(target.closest('a, button, input, select, textarea, [role="button"]'));
+  }
+
+  function openProductDetails() {
+    navigate(productDetailPath);
+  }
+
+  function handleCardClick(event) {
+    if (isInteractiveCardTarget(event.target)) return;
+    openProductDetails();
+  }
+
+  function handleCardKeyDown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (isInteractiveCardTarget(event.target)) return;
+    event.preventDefault();
+    openProductDetails();
+  }
+
+  async function handleBuyNow(event) {
+    event?.stopPropagation();
     setAdding(true);
 
     try {
@@ -62,9 +83,16 @@ function ProductCard({ product, onQuickView }) {
   }
 
   return (
-    <article className="product-card premium-product-card ecommerce-product-card">
+    <article
+      className="product-card premium-product-card ecommerce-product-card w-100"
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${productName}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+    >
       <div className="product-media premium-product-media ecommerce-product-card__media">
-        <Link to={`/shop/${productPath}`} className="product-media-stack ecommerce-product-card__image-link" aria-label={`Open ${productName}`}>
+        <Link to={productDetailPath} className="product-media-stack ecommerce-product-card__image-link" aria-label={`Open ${productName}`}>
           <img
             src={primaryImage}
             alt={productName}
@@ -82,13 +110,24 @@ function ProductCard({ product, onQuickView }) {
         <div className="product-card-overlays">
           <span className="product-badge">{product.badge || 'Slessaa Edit'}</span>
           <div className="product-actions">
-            <button type="button" className="icon-circle" onClick={() => onQuickView?.(product)} aria-label="Quick view">
+            <button
+              type="button"
+              className="icon-circle"
+              onClick={(event) => {
+                event.stopPropagation();
+                onQuickView?.(product);
+              }}
+              aria-label="Quick view"
+            >
               <i className="bi bi-eye"></i>
             </button>
             <button
               type="button"
               className={`icon-circle ${isSaved(product) ? 'active' : ''}`}
-              onClick={() => toggleWishlist(product)}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleWishlist(product);
+              }}
               aria-label="Add to wishlist"
             >
               <i className={`bi ${isSaved(product) ? 'bi-heart-fill' : 'bi-heart'}`}></i>
@@ -104,7 +143,7 @@ function ProductCard({ product, onQuickView }) {
             {productAudience ? <span className="product-audience">{productAudience}</span> : null}
           </div>
           <h5 className="product-card-title">
-            <Link to={`/shop/${productPath}`}>{productName}</Link>
+            <Link to={productDetailPath}>{productName}</Link>
           </h5>
           <div className="product-price-stack ecommerce-product-card__price">
             <strong>NPR {price.toLocaleString()}</strong>
@@ -149,12 +188,13 @@ function ProductCard({ product, onQuickView }) {
                 to="/tailoring"
                 state={{ referenceProduct: product }}
                 className="btn btn-slessaa btn-slessaa-outline"
+                onClick={(event) => event.stopPropagation()}
               >
                 Customize for You
               </Link>
             ) : null}
             {!canAddToCart && !canCustomize ? (
-              <Link to={`/shop/${productPath}`} className="btn btn-slessaa btn-slessaa-outline">
+              <Link to={productDetailPath} className="btn btn-slessaa btn-slessaa-outline" onClick={(event) => event.stopPropagation()}>
                 View Details
               </Link>
             ) : null}

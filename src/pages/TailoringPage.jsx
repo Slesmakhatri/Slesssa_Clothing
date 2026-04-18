@@ -441,12 +441,32 @@ function TailoringPage() {
               {designSuggestionError ? <div className="invalid-feedback d-block">{designSuggestionError}</div> : null}
               {designSuggestionLoading ? (
                 <div className="ai-suggestion-card ai-suggestion-card--loading">
-                  <strong>Generating your design direction</strong>
-                  <p>Reading the prompt and matching it to style, fabric, fit, neckline, and color guidance.</p>
+                  <div className="design-visual-placeholder" aria-hidden="true">
+                    <span></span>
+                  </div>
+                  <strong>Generating your design direction and image</strong>
+                  <p>Reading the prompt and matching it to style, fabric, fit, neckline, color guidance, and a visual preview.</p>
                 </div>
               ) : null}
               {designSuggestion ? (
                 <div className="ai-suggestion-card ai-suggestion-card--revealed">
+                  {designSuggestion.image_url ? (
+                    <div className="design-suggestion-visual">
+                      <img src={designSuggestion.image_url} alt={`${designSuggestion.title} visual design`} />
+                      <small>
+                        {designSuggestion.image_generation_status === 'fallback'
+                          ? 'Fallback visual based on your prompt'
+                          : designSuggestion.image_source
+                            ? `Image source: ${designSuggestion.image_source}`
+                            : 'Generated visual design'}
+                      </small>
+                    </div>
+                  ) : (
+                    <div className="design-visual-fallback">
+                      <strong>Visual preview unavailable</strong>
+                      <p>The design brief is still ready to use.</p>
+                    </div>
+                  )}
                   <div>
                     <strong>{designSuggestion.title}</strong>
                     <span>{designSuggestion.occasion}</span>

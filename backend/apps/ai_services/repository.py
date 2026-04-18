@@ -94,6 +94,10 @@ def save_design_concept(user, payload):
         "pattern_ideas": payload.get("pattern_ideas", []),
         "notes": payload.get("notes", ""),
         "occasion": payload.get("occasion", ""),
+        "image_url": payload.get("image_url", ""),
+        "image_source": payload.get("image_source", ""),
+        "image_prompt": payload.get("image_prompt", ""),
+        "image_generation_status": payload.get("image_generation_status", ""),
         "created_at": utcnow(),
     }
     mongo_document = prepare_document_for_mongo(document)

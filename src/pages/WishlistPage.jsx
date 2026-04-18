@@ -35,9 +35,11 @@ function WishlistPage() {
           <div className="table-card">
             <SectionTitle eyebrow="Customer Wishlist" title="Your saved products" align="start" />
             {wishlistProducts.length ? (
-              <div className="shop-product-grid">
+              <div className="row g-3 g-lg-4 align-items-stretch product-section-grid">
                 {wishlistProducts.map((product) => (
-                  <ProductCard key={product.slug || product.id} product={product} />
+                  <div key={product.slug || product.id} className="col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex">
+                    <ProductCard product={product} />
+                  </div>
                 ))}
               </div>
             ) : (

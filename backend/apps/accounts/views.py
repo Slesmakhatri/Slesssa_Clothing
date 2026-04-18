@@ -2,6 +2,7 @@ from django.conf import settings
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from urllib.parse import urlsplit
 
 from common.storage import store_uploaded_file
 
@@ -54,10 +55,20 @@ class GoogleAuthConfigAPIView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        request_origin = request.headers.get("Origin") or ""
+        if not request_origin:
+            referer = request.headers.get("Referer", "")
+            parsed_referer = urlsplit(referer)
+            if parsed_referer.scheme and parsed_referer.netloc:
+                request_origin = f"{parsed_referer.scheme}://{parsed_referer.netloc}"
+        redirect_uri = settings.GOOGLE_REDIRECT_URI or ""
+        if settings.DEBUG and request_origin and request_origin.startswith(("http://", "https://")):
+            redirect_uri = f"{request_origin}/auth/google/callback"
+
         return Response(
             {
                 "client_id": settings.GOOGLE_CLIENT_ID or None,
-                "redirect_uri": settings.GOOGLE_REDIRECT_URI or None,
+                "redirect_uri": redirect_uri or None,
                 "enabled": bool(settings.GOOGLE_CLIENT_ID),
             }
         )

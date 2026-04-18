@@ -204,13 +204,31 @@ class ChatbotAPIView(APIView):
     def post(self, request):
         serializer = ChatbotRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payload = chatbot_assistant_reply(serializer.validated_data["message"], user=_request_user(request))
+        try:
+            payload = chatbot_assistant_reply(serializer.validated_data["message"], user=_request_user(request))
+        except Exception:
+            payload = {
+                "message": "I can still help with design ideas, customization steps, measurements, product search terms, and order tracking. The live assistant data source is unavailable right now.",
+                "reply": "I can still help with design ideas, customization steps, measurements, product search terms, and order tracking. The live assistant data source is unavailable right now.",
+                "products": [],
+                "filters": {},
+                "vendors": [],
+                "tailors": [],
+                "suggested_vendor": None,
+                "suggested_tailor": None,
+                "intent": "fallback",
+                "actions": ["Help me choose a design", "Open tailoring page", "Track my order"],
+            }
         return Response(
             {
                 "message": payload["message"],
+                "reply": payload.get("reply") or payload["message"],
                 "products": ProductSerializer(payload["products"], many=True, context={"request": request}).data,
                 "filters": payload.get("filters", {}),
                 "vendors": payload.get("vendors", []),
+                "tailors": payload.get("tailors", []),
+                "suggested_vendor": payload.get("suggested_vendor"),
+                "suggested_tailor": payload.get("suggested_tailor"),
                 "intent": payload.get("intent", "general"),
                 "actions": payload.get("actions", []),
             }

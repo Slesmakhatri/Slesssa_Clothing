@@ -732,7 +732,7 @@ function VendorDashboardWorkspace({
           ) : null}
 
           {activeSection === 'products' ? (
-            <div className="table-card">
+            <div className="table-card vendor-products-panel">
               <VendorSectionHeader
                 title="Products"
                 description="Manage stock, positioning, and product type."

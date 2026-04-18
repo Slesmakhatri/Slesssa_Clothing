@@ -70,6 +70,10 @@ class DesignSuggestionSerializer(serializers.Serializer):
     pattern_ideas = serializers.ListField(child=serializers.CharField())
     notes = serializers.CharField()
     occasion = serializers.CharField(required=False, allow_blank=True)
+    image_url = serializers.CharField(required=False, allow_blank=True)
+    image_source = serializers.CharField(required=False, allow_blank=True)
+    image_prompt = serializers.CharField(required=False, allow_blank=True)
+    image_generation_status = serializers.CharField(required=False, allow_blank=True)
 
 
 class DesignSuggestionSaveSerializer(DesignSuggestionSerializer):

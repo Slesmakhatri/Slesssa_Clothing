@@ -2,7 +2,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import SectionTitle from '../components/common/SectionTitle';
-import { createAdminUser, deleteAdminUser, getDashboardSummary, getPlatformSettings, getSuperAdminAnalytics, listUsers, updateAdminUser, updatePlatformSettings } from '../services/api';
+import {
+  createAdminUser,
+  deleteAdminUser,
+  getDashboardSummary,
+  getPlatformSettings,
+  getSuperAdminAnalytics,
+  listUsers,
+  listTailorProfiles,
+  listVendorApplications,
+  listVendors,
+  listOrders,
+  updateAdminUser,
+  updateOrderStatus,
+  updatePlatformSettings,
+  updateTailorProfileStatus,
+  updateVendorApplication,
+  updateVendorStatus
+} from '../services/api';
 
 const DEFAULT_ADMIN_FORM = {
   full_name: '',
@@ -29,6 +46,12 @@ const USER_FILTERS = [
   { key: 'admin', label: 'Admins' }
 ];
 
+const ORDER_STATUS_ACTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'processing', label: 'In progress' },
+  { value: 'completed', label: 'Completed' }
+];
+
 function formatDate(value) {
   if (!value) return 'Not available';
   const date = new Date(value);
@@ -38,6 +61,12 @@ function formatDate(value) {
 
 function formatRole(value) {
   return String(value || 'customer').replaceAll('_', ' ');
+}
+
+function formatOrderStatus(value) {
+  const status = String(value || 'pending').toLowerCase();
+  if (status === 'processing' || status === 'ready') return 'In progress';
+  return status.replaceAll('_', ' ');
 }
 
 function maxSeriesValue(items, keys) {
@@ -136,6 +165,10 @@ function SuperAdminDashboardPage() {
   const activeSection = section || 'dashboard';
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [vendorApplications, setVendorApplications] = useState([]);
+  const [tailors, setTailors] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [form, setForm] = useState(DEFAULT_ADMIN_FORM);
   const [settingsForm, setSettingsForm] = useState(DEFAULT_SETTINGS_FORM);
   const [editingId, setEditingId] = useState(null);
@@ -146,17 +179,29 @@ function SuperAdminDashboardPage() {
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [vendorReviewNotes, setVendorReviewNotes] = useState({});
+  const [savingVendorAction, setSavingVendorAction] = useState('');
+  const [savingTailorAction, setSavingTailorAction] = useState('');
+  const [savingOrderAction, setSavingOrderAction] = useState('');
 
   async function loadWorkspace({ silent = false } = {}) {
     if (!silent) setLoading(true);
     try {
-      const [summaryPayload, userList, platformSettings] = await Promise.all([
+      const [summaryPayload, userList, platformSettings, vendorList, vendorApplicationList, tailorList, orderList] = await Promise.all([
         getDashboardSummary('super-admin'),
         listUsers(),
-        getPlatformSettings()
+        getPlatformSettings(),
+        listVendors(),
+        listVendorApplications(),
+        listTailorProfiles(),
+        listOrders()
       ]);
       setSummary(summaryPayload);
       setUsers(userList);
+      setVendors(vendorList);
+      setVendorApplications(vendorApplicationList);
+      setTailors(tailorList);
+      setOrders(orderList);
       setSelectedUserId((current) => current || userList[0]?.id || null);
       setSettingsForm({
         customized: platformSettings?.commission_rates?.customized ?? DEFAULT_SETTINGS_FORM.customized,
@@ -187,12 +232,15 @@ function SuperAdminDashboardPage() {
   }, [activeSection, analytics]);
 
   const adminUsers = users.filter((user) => ['admin', 'super_admin'].includes(user.role));
+  const pendingVendorApplications = vendorApplications.filter((application) => application.status === 'pending');
+  const pendingVendors = vendors.filter((vendor) => vendor.approval_status === 'pending');
+  const pendingTailors = tailors.filter((tailor) => (tailor.approval_status || 'pending') === 'pending');
   const stats = [
     { label: 'Users', value: String(summary?.total_users || users.length).padStart(2, '0'), icon: 'bi-people' },
     { label: 'Admins', value: String(summary?.total_admins || adminUsers.filter((user) => user.role === 'admin').length).padStart(2, '0'), icon: 'bi-person-gear' },
-    { label: 'Vendors', value: String(summary?.total_vendors || 0).padStart(2, '0'), icon: 'bi-shop' },
-    { label: 'Tailors', value: String(summary?.total_tailors || 0).padStart(2, '0'), icon: 'bi-scissors' },
-    { label: 'Orders', value: String(summary?.total_orders || 0).padStart(2, '0'), icon: 'bi-bag-check' },
+    { label: 'Vendors', value: String(summary?.total_vendors || vendors.length).padStart(2, '0'), icon: 'bi-shop' },
+    { label: 'Tailors', value: String(summary?.total_tailors || tailors.length).padStart(2, '0'), icon: 'bi-scissors' },
+    { label: 'Orders', value: String(summary?.total_orders || orders.length).padStart(2, '0'), icon: 'bi-bag-check' },
     { label: 'Commission', value: `NPR ${Number(summary?.platform_commission || 0).toLocaleString()}`, icon: 'bi-cash-stack' }
   ];
 
@@ -266,6 +314,73 @@ function SuperAdminDashboardPage() {
       await loadWorkspace({ silent: true });
     } catch (error) {
       setStatus(error?.message || 'Could not update platform settings.');
+    }
+  }
+
+  async function handleVendorApplicationDecision(application, nextStatus) {
+    const reviewNote = vendorReviewNotes[application.id] || (nextStatus === 'approved' ? 'Approved by super admin.' : 'Rejected by super admin.');
+    setStatus('');
+    setSavingVendorAction(`application-${application.id}-${nextStatus}`);
+    try {
+      await updateVendorApplication({
+        id: application.id,
+        status: nextStatus,
+        review_note: reviewNote
+      });
+      setStatus(`Vendor application ${nextStatus}.`);
+      await loadWorkspace({ silent: true });
+    } catch (error) {
+      setStatus(error?.message || `Could not ${nextStatus} vendor application.`);
+    } finally {
+      setSavingVendorAction('');
+    }
+  }
+
+  async function handleVendorStatusDecision(vendor, nextStatus) {
+    if (!vendor?.slug) return;
+    setStatus('');
+    setSavingVendorAction(`vendor-${vendor.slug}-${nextStatus}`);
+    try {
+      await updateVendorStatus(vendor.slug, nextStatus);
+      setStatus(`${vendor.brand_name || 'Vendor'} marked as ${nextStatus}.`);
+      await loadWorkspace({ silent: true });
+    } catch (error) {
+      setStatus(error?.message || `Could not ${nextStatus} vendor.`);
+    } finally {
+      setSavingVendorAction('');
+    }
+  }
+
+  async function handleTailorStatusDecision(tailor, nextStatus) {
+    if (!tailor?.id) return;
+    setStatus('');
+    setSavingTailorAction(`tailor-${tailor.id}-${nextStatus}`);
+    try {
+      await updateTailorProfileStatus(tailor.id, nextStatus);
+      setStatus(`${tailor.full_name || tailor.user_detail?.full_name || 'Tailor'} marked as ${nextStatus}.`);
+      await loadWorkspace({ silent: true });
+    } catch (error) {
+      setStatus(error?.message || `Could not ${nextStatus} tailor.`);
+    } finally {
+      setSavingTailorAction('');
+    }
+  }
+
+  async function handleOrderStatusDecision(order, nextStatus) {
+    if (!order?.id) return;
+    setStatus('');
+    setSavingOrderAction(`order-${order.id}-${nextStatus}`);
+    try {
+      await updateOrderStatus(order.id, {
+        status: nextStatus,
+        note: `Marked ${formatOrderStatus(nextStatus)} by super admin.`
+      });
+      setStatus(`${order.order_number || 'Order'} marked ${formatOrderStatus(nextStatus)}.`);
+      await loadWorkspace({ silent: true });
+    } catch (error) {
+      setStatus(error?.message || 'Could not update order status.');
+    } finally {
+      setSavingOrderAction('');
     }
   }
 
@@ -398,6 +513,345 @@ function SuperAdminDashboardPage() {
     );
   }
 
+  function renderVendorsPage() {
+    return (
+      <div className="super-admin-vendors-page">
+        <div className="super-admin-page-head">
+          <SectionTitle
+            eyebrow="Vendors"
+            title="Vendor approval center"
+            text="Review vendor applications, approve or reject onboarding, and manage active vendor profile access."
+            align="start"
+          />
+          <div className="super-admin-vendor-summary">
+            <span>{pendingVendorApplications.length} pending applications</span>
+            <span>{pendingVendors.length} pending profiles</span>
+          </div>
+        </div>
+
+        <div className="row g-4">
+          <div className="col-12">
+            <div className="table-card super-admin-vendor-panel">
+              <SectionTitle eyebrow="Applications" title="Vendor applications" text="Approve applications so vendors can complete signup and start selling." align="start" />
+              <div className="table-responsive">
+                <table className="table align-middle mb-0 super-admin-vendor-table">
+                  <thead>
+                    <tr>
+                      <th>Business</th>
+                      <th>Applicant</th>
+                      <th>Specialization</th>
+                      <th>Location</th>
+                      <th>Status</th>
+                      <th>Review Note</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendorApplications.length ? vendorApplications.map((application) => (
+                      <tr key={application.id}>
+                        <td>
+                          <strong>{application.business_name}</strong>
+                          <div className="vendor-table-meta">{application.business_description || 'No description provided.'}</div>
+                        </td>
+                        <td>
+                          <strong>{application.full_name}</strong>
+                          <div className="vendor-table-meta">{application.email}</div>
+                          <div className="vendor-table-meta">{application.phone}</div>
+                        </td>
+                        <td>{application.specialization || 'Not provided'}</td>
+                        <td>{application.location || 'Not provided'}</td>
+                        <td><span className={`status-pill status-${application.status}`}>{application.status}</span></td>
+                        <td>
+                          <textarea
+                            rows="2"
+                            className="super-admin-review-note"
+                            placeholder="Optional note"
+                            value={vendorReviewNotes[application.id] ?? application.review_note ?? ''}
+                            onChange={(event) => setVendorReviewNotes((current) => ({ ...current, [application.id]: event.target.value }))}
+                          />
+                        </td>
+                        <td>
+                          <div className="vendor-table-actions">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-dark"
+                              disabled={savingVendorAction === `application-${application.id}-approved` || application.status === 'approved'}
+                              onClick={() => handleVendorApplicationDecision(application, 'approved')}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              disabled={savingVendorAction === `application-${application.id}-rejected` || application.status === 'rejected'}
+                              onClick={() => handleVendorApplicationDecision(application, 'rejected')}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="7">No vendor applications yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-12">
+            <div className="table-card super-admin-vendor-panel">
+              <SectionTitle eyebrow="Profiles" title="Vendor list" text="Manage vendor profiles that already exist in the system." align="start" />
+              <div className="table-responsive">
+                <table className="table align-middle mb-0 super-admin-vendor-table">
+                  <thead>
+                    <tr>
+                      <th>Shop</th>
+                      <th>Owner</th>
+                      <th>Contact</th>
+                      <th>Specialization</th>
+                      <th>Setup</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendors.length ? vendors.map((vendor) => (
+                      <tr key={vendor.id}>
+                        <td>
+                          <strong>{vendor.brand_name || 'Unnamed shop'}</strong>
+                          <div className="vendor-table-meta">{vendor.location || vendor.address || 'No location added'}</div>
+                        </td>
+                        <td>
+                          <strong>{vendor.user_detail?.full_name || vendor.user_detail?.username || 'Vendor'}</strong>
+                          <div className="vendor-table-meta">{vendor.user_detail?.email || 'No account email'}</div>
+                        </td>
+                        <td>
+                          <div>{vendor.contact_email || 'No email'}</div>
+                          <div className="vendor-table-meta">{vendor.contact_phone || 'No phone'}</div>
+                        </td>
+                        <td>{vendor.specialization || 'Not provided'}</td>
+                        <td>{vendor.is_shop_setup_complete ? 'Complete' : 'Incomplete'}</td>
+                        <td><span className={`status-pill status-${vendor.approval_status}`}>{vendor.approval_status}</span></td>
+                        <td>
+                          <div className="vendor-table-actions">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-dark"
+                              disabled={savingVendorAction === `vendor-${vendor.slug}-approved` || vendor.approval_status === 'approved'}
+                              onClick={() => handleVendorStatusDecision(vendor, 'approved')}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              disabled={savingVendorAction === `vendor-${vendor.slug}-rejected` || vendor.approval_status === 'rejected'}
+                              onClick={() => handleVendorStatusDecision(vendor, 'rejected')}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan="7">No vendor profiles found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderTailorsPage() {
+    return (
+      <div className="super-admin-tailors-page">
+        <div className="super-admin-page-head">
+          <SectionTitle
+            eyebrow="Tailors"
+            title="Tailor management"
+            text="Review tailor profiles, approve or reject access, and monitor availability for custom stitching work."
+            align="start"
+          />
+          <div className="super-admin-vendor-summary">
+            <span>{tailors.length} total tailors</span>
+            <span>{pendingTailors.length} pending approval</span>
+          </div>
+        </div>
+
+        <div className="table-card super-admin-tailor-panel">
+          <SectionTitle eyebrow="Approval" title="Tailor list" text="Only approved and available tailors are shown to customers for recommendations." align="start" />
+          <div className="table-responsive">
+            <table className="table align-middle mb-0 super-admin-tailor-table">
+              <thead>
+                <tr>
+                  <th>Tailor</th>
+                  <th>Contact</th>
+                  <th>Specialization</th>
+                  <th>Experience</th>
+                  <th>Location</th>
+                  <th>Availability</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tailors.length ? tailors.map((tailor) => {
+                  const approvalStatus = tailor.approval_status || 'pending';
+                  const displayName = tailor.full_name || tailor.user_detail?.full_name || 'Unnamed tailor';
+                  return (
+                    <tr key={tailor.id}>
+                      <td>
+                        <strong>{displayName}</strong>
+                        <div className="vendor-table-meta">{tailor.short_bio || 'No profile bio added.'}</div>
+                      </td>
+                      <td>
+                        <div>{tailor.user_detail?.email || 'No email'}</div>
+                        <div className="vendor-table-meta">{tailor.user_detail?.phone || 'No phone'}</div>
+                      </td>
+                      <td>
+                        <strong>{tailor.specialization || 'Custom tailoring'}</strong>
+                        <div className="vendor-table-meta">{(tailor.supported_clothing_types || []).join(', ') || 'Clothing types not listed'}</div>
+                      </td>
+                      <td>{Number(tailor.years_of_experience || 0)} years</td>
+                      <td>
+                        <div>{tailor.city || tailor.location_name || 'Not provided'}</div>
+                        <div className="vendor-table-meta">{tailor.address || 'No address'}</div>
+                      </td>
+                      <td>{tailor.is_available ? 'Available' : 'Unavailable'}</td>
+                      <td><span className={`status-pill status-${approvalStatus}`}>{approvalStatus}</span></td>
+                      <td>
+                        <div className="vendor-table-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-dark"
+                            disabled={savingTailorAction === `tailor-${tailor.id}-approved` || approvalStatus === 'approved'}
+                            onClick={() => handleTailorStatusDecision(tailor, 'approved')}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            disabled={savingTailorAction === `tailor-${tailor.id}-rejected` || approvalStatus === 'rejected'}
+                            onClick={() => handleTailorStatusDecision(tailor, 'rejected')}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr><td colSpan="8">No tailor profiles found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderOrdersPage() {
+    const pendingCount = orders.filter((order) => String(order.status || '').toLowerCase() === 'pending').length;
+    const progressCount = orders.filter((order) => ['processing', 'ready'].includes(String(order.status || '').toLowerCase())).length;
+    const completedCount = orders.filter((order) => ['completed', 'delivered'].includes(String(order.status || '').toLowerCase())).length;
+
+    return (
+      <div className="super-admin-orders-page">
+        <div className="super-admin-page-head">
+          <SectionTitle
+            eyebrow="Orders"
+            title="Order management"
+            text="Track customer orders and move fulfillment between pending, in progress, and completed."
+            align="start"
+          />
+          <div className="super-admin-vendor-summary">
+            <span>{pendingCount} pending</span>
+            <span>{progressCount} in progress</span>
+            <span>{completedCount} completed</span>
+          </div>
+        </div>
+
+        <div className="table-card super-admin-order-panel">
+          <SectionTitle eyebrow="Order List" title="All orders" text="Update order status from the Super Admin workspace." align="start" />
+          <div className="table-responsive">
+            <table className="table align-middle mb-0 super-admin-order-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Payment</th>
+                  <th>City</th>
+                  <th>Status</th>
+                  <th>Update Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length ? orders.map((order) => (
+                  <tr key={order.id}>
+                    <td>
+                      <strong>{order.order_number || `Order #${order.id}`}</strong>
+                      <div className="vendor-table-meta">{formatDate(order.created_at)}</div>
+                    </td>
+                    <td>
+                      <strong>{order.full_name || 'Customer'}</strong>
+                      <div className="vendor-table-meta">{order.email}</div>
+                      <div className="vendor-table-meta">{order.phone}</div>
+                    </td>
+                    <td>
+                      <strong>{(order.items || []).length} item{(order.items || []).length === 1 ? '' : 's'}</strong>
+                      <div className="vendor-table-meta">
+                        {(order.items || []).slice(0, 2).map((item) => item.product_name).filter(Boolean).join(', ') || 'No item details'}
+                      </div>
+                    </td>
+                    <td>NPR {Number(order.total || 0).toLocaleString()}</td>
+                    <td>
+                      <span className={`status-pill status-${String(order.payment_status || 'pending').toLowerCase()}`}>
+                        {order.payment_status || 'pending'}
+                      </span>
+                    </td>
+                    <td>{order.city || 'N/A'}</td>
+                    <td>
+                      <span className={`status-pill status-${String(order.status || 'pending').toLowerCase()}`}>
+                        {formatOrderStatus(order.status)}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="super-admin-status-actions">
+                        {ORDER_STATUS_ACTIONS.map((statusAction) => (
+                          <button
+                            key={statusAction.value}
+                            type="button"
+                            className={`btn btn-sm ${String(order.status || '').toLowerCase() === statusAction.value ? 'btn-dark' : 'btn-outline-dark'}`}
+                            disabled={savingOrderAction === `order-${order.id}-${statusAction.value}` || String(order.status || '').toLowerCase() === statusAction.value}
+                            onClick={() => handleOrderStatusDecision(order, statusAction.value)}
+                          >
+                            {statusAction.label}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="8">No orders found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderSettingsAndFinance() {
     return (
       <div className="row g-4">
@@ -516,9 +970,12 @@ function SuperAdminDashboardPage() {
       {status ? <div className="alert alert-info">{status}</div> : null}
       {activeSection === 'users' ? renderUsersPage() : null}
       {activeSection === 'admin-management' ? renderAdminManagementPage() : null}
+      {activeSection === 'vendors' ? renderVendorsPage() : null}
+      {activeSection === 'tailors' ? renderTailorsPage() : null}
+      {activeSection === 'orders' ? renderOrdersPage() : null}
       {activeSection === 'analytics' ? renderAnalyticsPage() : null}
       {activeSection === 'settings' || activeSection === 'payouts' || activeSection === 'dashboard' ? renderSettingsAndFinance() : null}
-      {!['users', 'admin-management', 'analytics', 'settings', 'payouts', 'dashboard'].includes(activeSection) ? (
+      {!['users', 'admin-management', 'vendors', 'tailors', 'orders', 'analytics', 'settings', 'payouts', 'dashboard'].includes(activeSection) ? (
         <div className="table-card"><SectionTitle eyebrow="Super Admin" title={activeSection.replaceAll('-', ' ')} text="This module uses the same protected Super Admin workspace data and can be expanded with dedicated controls." align="start" /></div>
       ) : null}
     </section>
