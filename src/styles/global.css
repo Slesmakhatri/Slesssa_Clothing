@@ -8348,6 +8348,25 @@ body,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.role-workspace-super_admin .dashboard-stat-card-link {
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.role-workspace-super_admin .dashboard-stat-card-link:hover {
+  color: inherit;
+  border-color: rgba(151, 86, 65, 0.28);
+  transform: translateY(-2px);
+}
+
+.role-workspace-super_admin .dashboard-stat-card-link:focus-visible {
+  color: inherit;
+  outline: 3px solid rgba(151, 86, 65, 0.28);
+  outline-offset: 4px;
+}
+
 .role-workspace-super_admin .dashboard-metric-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -8388,6 +8407,20 @@ body,
 }
 
 .role-workspace-super_admin .super-admin-tailors-page {
+  display: grid;
+  gap: clamp(1rem, 1.8vw, 1.45rem);
+  width: 100%;
+  min-width: 0;
+}
+
+.role-workspace-super_admin .super-admin-orders-page {
+  display: grid;
+  gap: clamp(1rem, 1.8vw, 1.45rem);
+  width: 100%;
+  min-width: 0;
+}
+
+.role-workspace-super_admin .super-admin-returns-page {
   display: grid;
   gap: clamp(1rem, 1.8vw, 1.45rem);
   width: 100%;
@@ -8471,6 +8504,44 @@ body,
   vertical-align: middle;
 }
 
+.role-workspace-super_admin .super-admin-order-panel .section-title {
+  margin-bottom: 1rem;
+}
+
+.role-workspace-super_admin .super-admin-order-table {
+  min-width: 980px;
+}
+
+.role-workspace-super_admin .super-admin-order-table td {
+  vertical-align: middle;
+}
+
+.role-workspace-super_admin .super-admin-return-panel .section-title {
+  margin-bottom: 1rem;
+}
+
+.role-workspace-super_admin .super-admin-return-table {
+  min-width: 860px;
+}
+
+.role-workspace-super_admin .super-admin-return-table td {
+  vertical-align: middle;
+}
+
+.role-workspace-super_admin .super-admin-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 260px;
+}
+
+.role-workspace-super_admin .super-admin-status-actions .btn {
+  min-height: 36px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 @media (min-width: 1400px) {
   .role-workspace-super_admin .vendor-metrics-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -8542,5 +8613,10 @@ body,
 
   .role-workspace-super_admin .vendor-table-actions {
     justify-content: flex-start;
+  }
+
+  .role-workspace-super_admin .super-admin-status-actions {
+    justify-content: flex-start;
+    min-width: 0;
   }
 }

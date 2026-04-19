@@ -237,7 +237,7 @@ def validate_conversation_start(user, payload):
     from apps.tailoring.repository import get_tailoring_request_for_user
 
     if user.role not in {"customer", "tailor"}:
-        raise ValueError("Only customers and assigned tailors can start tailor chat conversations.")
+        raise ValueError("Only customers (for vendor chats) and assigned tailors (for tailor chats) can start conversations.")
 
     validated = {
         "kind": payload["kind"],
@@ -358,8 +358,9 @@ def _ensure_tailor_request_conversations_for_user(user):
 
 def list_conversations(user, params=None):
     params = params or {}
-    if params.get("kind") == "customer_tailor":
-        _ensure_tailor_request_conversations_for_user(user)
+    # Ensure tailoring-request conversations exist for the user so threads appear
+    # even when the frontend does not explicitly filter by kind.
+    _ensure_tailor_request_conversations_for_user(user)
     documents = [clean_document(item) for item in conversations_collection().find({}, sort=[("updated_at", -1), ("id", -1)])]
     documents = [item for item in documents if _conversation_accessible(user, item)]
     kind = params.get("kind")

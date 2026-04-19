@@ -13,6 +13,7 @@ import {
   listVendorApplications,
   listVendors,
   listOrders,
+  listReturnRequests,
   updateAdminUser,
   updateOrderStatus,
   updatePlatformSettings,
@@ -51,6 +52,11 @@ const ORDER_STATUS_ACTIONS = [
   { value: 'processing', label: 'In progress' },
   { value: 'completed', label: 'Completed' }
 ];
+
+const SECTION_ALIASES = {
+  admins: 'admin-management',
+  commission: 'payouts'
+};
 
 function formatDate(value) {
   if (!value) return 'Not available';
@@ -162,13 +168,15 @@ function DonutChart({ items = [] }) {
 
 function SuperAdminDashboardPage() {
   const { section } = useParams();
-  const activeSection = section || 'dashboard';
+  const requestedSection = section || 'dashboard';
+  const activeSection = SECTION_ALIASES[requestedSection] || requestedSection;
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [vendorApplications, setVendorApplications] = useState([]);
   const [tailors, setTailors] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [returnRequests, setReturnRequests] = useState([]);
   const [form, setForm] = useState(DEFAULT_ADMIN_FORM);
   const [settingsForm, setSettingsForm] = useState(DEFAULT_SETTINGS_FORM);
   const [editingId, setEditingId] = useState(null);
@@ -187,14 +195,15 @@ function SuperAdminDashboardPage() {
   async function loadWorkspace({ silent = false } = {}) {
     if (!silent) setLoading(true);
     try {
-      const [summaryPayload, userList, platformSettings, vendorList, vendorApplicationList, tailorList, orderList] = await Promise.all([
+      const [summaryPayload, userList, platformSettings, vendorList, vendorApplicationList, tailorList, orderList, returnRequestList] = await Promise.all([
         getDashboardSummary('super-admin'),
         listUsers(),
         getPlatformSettings(),
         listVendors(),
         listVendorApplications(),
         listTailorProfiles(),
-        listOrders()
+        listOrders(),
+        listReturnRequests()
       ]);
       setSummary(summaryPayload);
       setUsers(userList);
@@ -202,6 +211,7 @@ function SuperAdminDashboardPage() {
       setVendorApplications(vendorApplicationList);
       setTailors(tailorList);
       setOrders(orderList);
+      setReturnRequests(returnRequestList);
       setSelectedUserId((current) => current || userList[0]?.id || null);
       setSettingsForm({
         customized: platformSettings?.commission_rates?.customized ?? DEFAULT_SETTINGS_FORM.customized,
@@ -236,12 +246,12 @@ function SuperAdminDashboardPage() {
   const pendingVendors = vendors.filter((vendor) => vendor.approval_status === 'pending');
   const pendingTailors = tailors.filter((tailor) => (tailor.approval_status || 'pending') === 'pending');
   const stats = [
-    { label: 'Users', value: String(summary?.total_users || users.length).padStart(2, '0'), icon: 'bi-people' },
-    { label: 'Admins', value: String(summary?.total_admins || adminUsers.filter((user) => user.role === 'admin').length).padStart(2, '0'), icon: 'bi-person-gear' },
-    { label: 'Vendors', value: String(summary?.total_vendors || vendors.length).padStart(2, '0'), icon: 'bi-shop' },
-    { label: 'Tailors', value: String(summary?.total_tailors || tailors.length).padStart(2, '0'), icon: 'bi-scissors' },
-    { label: 'Orders', value: String(summary?.total_orders || orders.length).padStart(2, '0'), icon: 'bi-bag-check' },
-    { label: 'Commission', value: `NPR ${Number(summary?.platform_commission || 0).toLocaleString()}`, icon: 'bi-cash-stack' }
+    { label: 'Users', value: String(summary?.total_users || users.length).padStart(2, '0'), icon: 'bi-people', to: '/dashboard/super-admin/users' },
+    { label: 'Admins', value: String(summary?.total_admins || adminUsers.filter((user) => user.role === 'admin').length).padStart(2, '0'), icon: 'bi-person-gear', to: '/dashboard/super-admin/admins' },
+    { label: 'Vendors', value: String(summary?.total_vendors || vendors.length).padStart(2, '0'), icon: 'bi-shop', to: '/dashboard/super-admin/vendors' },
+    { label: 'Tailors', value: String(summary?.total_tailors || tailors.length).padStart(2, '0'), icon: 'bi-scissors', to: '/dashboard/super-admin/tailors' },
+    { label: 'Orders', value: String(summary?.total_orders || orders.length).padStart(2, '0'), icon: 'bi-bag-check', to: '/dashboard/super-admin/orders' },
+    { label: 'Commission', value: `NPR ${Number(summary?.platform_commission || 0).toLocaleString()}`, icon: 'bi-cash-stack', to: '/dashboard/super-admin/commission' }
   ];
 
   const filteredUsers = useMemo(() => {
@@ -852,6 +862,69 @@ function SuperAdminDashboardPage() {
     );
   }
 
+  function renderReturnsPage() {
+    const pendingReturns = returnRequests.filter((request) => String(request.status || 'pending').toLowerCase() === 'pending');
+    const resolvedReturns = returnRequests.filter((request) => ['approved', 'completed', 'refunded'].includes(String(request.status || '').toLowerCase()));
+
+    return (
+      <div className="super-admin-returns-page">
+        <div className="super-admin-page-head">
+          <SectionTitle
+            eyebrow="Returns"
+            title="Return management"
+            text="Review customer return requests and monitor refund workflow from the Super Admin workspace."
+            align="start"
+          />
+          <div className="super-admin-vendor-summary">
+            <span>{returnRequests.length} total</span>
+            <span>{pendingReturns.length} pending</span>
+            <span>{resolvedReturns.length} resolved</span>
+          </div>
+        </div>
+
+        <div className="table-card super-admin-return-panel">
+          <SectionTitle eyebrow="Return Requests" title="Customer returns" text="Requests are loaded from the protected return request API." align="start" />
+          <div className="table-responsive">
+            <table className="table align-middle mb-0 super-admin-return-table">
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Customer</th>
+                  <th>Order</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnRequests.length ? returnRequests.map((request) => {
+                  const customerName = request.customer_name || request.customer_detail?.full_name || request.user_detail?.full_name || request.customer_email || 'Customer';
+                  const orderLabel = request.order_number || request.order_id || request.order || 'Not linked';
+                  return (
+                    <tr key={request.id || `${orderLabel}-${request.created_at}`}>
+                      <td><strong>#{request.id || 'return'}</strong></td>
+                      <td>{customerName}</td>
+                      <td>{orderLabel}</td>
+                      <td>{request.reason || request.message || 'No reason provided'}</td>
+                      <td>
+                        <span className={`status-pill status-${String(request.status || 'pending').toLowerCase()}`}>
+                          {formatOrderStatus(request.status)}
+                        </span>
+                      </td>
+                      <td>{formatDate(request.created_at || request.created)}</td>
+                    </tr>
+                  );
+                }) : (
+                  <tr><td colSpan="6">No return requests found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderSettingsAndFinance() {
     return (
       <div className="row g-4">
@@ -973,9 +1046,10 @@ function SuperAdminDashboardPage() {
       {activeSection === 'vendors' ? renderVendorsPage() : null}
       {activeSection === 'tailors' ? renderTailorsPage() : null}
       {activeSection === 'orders' ? renderOrdersPage() : null}
+      {activeSection === 'returns' ? renderReturnsPage() : null}
       {activeSection === 'analytics' ? renderAnalyticsPage() : null}
       {activeSection === 'settings' || activeSection === 'payouts' || activeSection === 'dashboard' ? renderSettingsAndFinance() : null}
-      {!['users', 'admin-management', 'vendors', 'tailors', 'orders', 'analytics', 'settings', 'payouts', 'dashboard'].includes(activeSection) ? (
+      {!['users', 'admin-management', 'vendors', 'tailors', 'orders', 'returns', 'analytics', 'settings', 'payouts', 'dashboard'].includes(activeSection) ? (
         <div className="table-card"><SectionTitle eyebrow="Super Admin" title={activeSection.replaceAll('-', ' ')} text="This module uses the same protected Super Admin workspace data and can be expanded with dedicated controls." align="start" /></div>
       ) : null}
     </section>

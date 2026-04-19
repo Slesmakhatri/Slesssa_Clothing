@@ -45,6 +45,7 @@ class WishlistItemSerializer(serializers.Serializer):
 class OrderItemSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     product = serializers.IntegerField(allow_null=True, required=False)
+    product_id = serializers.IntegerField(read_only=True, allow_null=True, required=False)
     product_name = serializers.CharField(required=False, allow_blank=True)
     product_detail = ProductSerializer(read_only=True)
     vendor = serializers.IntegerField(read_only=True, allow_null=True)
@@ -57,6 +58,7 @@ class OrderItemSerializer(serializers.Serializer):
     color = serializers.CharField(required=False, allow_blank=True)
     price = serializers.DecimalField(max_digits=10, decimal_places=2)
     product_type = serializers.CharField(read_only=True)
+    order_type = serializers.CharField(read_only=True, required=False)
     is_customized = serializers.BooleanField(read_only=True)
     item_subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     commission_rate = serializers.DecimalField(max_digits=4, decimal_places=2, read_only=True)
@@ -77,6 +79,7 @@ class TrackingUpdateSerializer(serializers.Serializer):
 class OrderSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     order_number = serializers.CharField(read_only=True)
+    customer_id = serializers.IntegerField(read_only=True, required=False)
     vendor_ids = serializers.ListField(child=serializers.IntegerField(), read_only=True, required=False)
     vendor_id = serializers.IntegerField(read_only=True, allow_null=True, required=False)
     full_name = serializers.CharField()
@@ -94,6 +97,7 @@ class OrderSerializer(serializers.Serializer):
     shipping_fee = serializers.DecimalField(max_digits=10, decimal_places=2)
     total = serializers.DecimalField(max_digits=10, decimal_places=2)
     status = serializers.CharField(read_only=True)
+    order_type = serializers.CharField(read_only=True, required=False)
     estimated_delivery = serializers.DateField(read_only=True, allow_null=True)
     billing_detail = serializers.JSONField(read_only=True, allow_null=True)
     payment_record = serializers.JSONField(read_only=True, allow_null=True)

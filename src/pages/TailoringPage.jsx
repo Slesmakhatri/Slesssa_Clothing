@@ -579,6 +579,7 @@ function TailoringPage() {
       if (measurementId) data.append('measurement', measurementId);
       if (selectedTailorId) data.append('assigned_tailor', selectedTailorId);
       if (typeof selectedSuggestion?.vendor === 'number') data.append('vendor', selectedSuggestion.vendor);
+      if (typeof selectedSuggestion?.id === 'number') data.append('reference_product_id', selectedSuggestion.id);
       if (selectedSuggestion?.slug) data.append('reference_product_slug', selectedSuggestion.slug);
       if (selectedSuggestion?.name) data.append('reference_product_name', selectedSuggestion.name);
       if (selectedSuggestion?.image) data.append('reference_product_image', selectedSuggestion.image);

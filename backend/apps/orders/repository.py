@@ -253,6 +253,7 @@ def _build_order_item(item_data, product=None):
     vendor_name = (vendor_detail or {}).get("brand_name", "") or item_data.get("vendor_name", "")
     product_type = item_data.get("product_type") or (product_detail or {}).get("product_type") or "ready_made"
     is_customized = bool(item_data.get("is_customized")) or bool(item_data.get("customization_request_id"))
+    order_type = "custom" if is_customized else "ready_made"
     commission_rate = Decimal("0.15") if is_customized else Decimal("0.10")
     quantity = int(item_data["quantity"])
     unit_price = Decimal(str(item_data["price"]))
@@ -262,6 +263,7 @@ def _build_order_item(item_data, product=None):
     return {
         "id": next_sequence("order_items"),
         "product": product["id"] if product else None,
+        "product_id": product["id"] if product else item_data.get("product"),
         "product_name": item_data.get("product_name") or (product.get("name") if product else ""),
         "product_detail": product_detail,
         "vendor": vendor_id,
@@ -275,6 +277,7 @@ def _build_order_item(item_data, product=None):
         "color": item_data.get("color", ""),
         "price": unit_price,
         "product_type": product_type,
+        "order_type": order_type,
         "is_customized": is_customized,
         "item_subtotal": item_subtotal,
         "commission_rate": commission_rate,
@@ -317,10 +320,13 @@ def create_order(user, validated_data):
     order_id = next_sequence("orders")
     total = Decimal(str(validated_data.get("total", subtotal + shipping_fee)))
     vendor_ids = sorted({item.get("vendor") for item in order_items if item.get("vendor") is not None})
+    item_order_types = {item.get("order_type", "ready_made") for item in order_items}
+    order_type = item_order_types.pop() if len(item_order_types) == 1 else "mixed"
     document = {
         "id": order_id,
         "order_number": f"SL-{order_id:05d}",
         "user_id": user.id,
+        "customer_id": user.id,
         "user_detail": {
             "id": user.id,
             "full_name": user.full_name,
@@ -342,6 +348,7 @@ def create_order(user, validated_data):
         "shipping_fee": shipping_fee,
         "total": total,
         "status": "pending",
+        "order_type": order_type,
         "estimated_delivery": validated_data.get("estimated_delivery"),
         "billing_detail": None,
         "payment_record": None,

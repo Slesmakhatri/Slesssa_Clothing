@@ -460,19 +460,23 @@ def _build_request_doc(user, data, measurement=None, vendor=None, assigned_tailo
     document = {
         "id": next_sequence("tailoring_requests"),
         "user": user.id,
+        "customer_id": user.id,
         "user_detail": {"id": user.id, "full_name": user.full_name, "email": user.email, "role": user.role},
         "vendor": vendor_detail["id"] if vendor_detail else None,
+        "vendor_id": vendor_detail["id"] if vendor_detail else None,
         "vendor_detail": vendor_detail,
         "assigned_tailor": assigned_tailor_detail["id"] if assigned_tailor_detail else None,
         "tailor_id": assigned_tailor_detail["id"] if assigned_tailor_detail else None,
         "assigned_tailor_detail": assigned_tailor_detail,
         "tailor_profile_detail": tailor_profile,
+        "order_type": "custom",
         "is_self_tailor": data.get("is_self_tailor", False),
         "self_tailor_name": data.get("self_tailor_name", ""),
         "self_tailor_phone": data.get("self_tailor_phone", ""),
         "self_tailor_address": data.get("self_tailor_address", ""),
         "self_tailor_notes": data.get("self_tailor_notes", ""),
         "reference_product_slug": data.get("reference_product_slug", ""),
+        "product_id": data.get("reference_product_id"),
         "reference_product_name": data.get("reference_product_name", ""),
         "reference_product_image": data.get("reference_product_image", ""),
         "clothing_type": data["clothing_type"],
@@ -868,9 +872,9 @@ def update_tailoring_request(user, request_id, updates):
     if user.role not in {"admin", "super_admin", "vendor", "tailor"} and document["user"] != user.id:
         return None
     allowed = {
-        "assigned_tailor", "status", "vendor", "is_self_tailor", "self_tailor_name", "self_tailor_phone",
+        "assigned_tailor", "status", "vendor", "vendor_id", "is_self_tailor", "self_tailor_name", "self_tailor_phone",
         "self_tailor_address", "self_tailor_notes", "reference_product_slug", "reference_product_name",
-        "reference_product_image", "clothing_type", "fabric", "color", "standard_size", "occasion_preference",
+        "reference_product_id", "product_id", "reference_product_image", "clothing_type", "fabric", "color", "standard_size", "occasion_preference",
         "style_preference", "delivery_preference", "design_notes", "inspiration_image", "measurement",
         "preferred_delivery_date",
     }
