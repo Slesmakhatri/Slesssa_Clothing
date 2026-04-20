@@ -45,7 +45,15 @@ function ChatWorkspace({
     if (!silent) setLoading(true);
     try {
       const items = await listChatConversations(kind ? { kind } : {});
-      setConversations(items);
+      setConversations((current) => {
+        const merged = [...items];
+        current.forEach((conversation) => {
+          if (!merged.some((item) => item.id === conversation.id)) {
+            merged.push(conversation);
+          }
+        });
+        return merged;
+      });
       setActiveConversationId((current) => current || items[0]?.id || null);
     } catch (error) {
       setStatus(error?.message || 'Could not load conversations.');
@@ -100,6 +108,7 @@ function ChatWorkspace({
           return [conversation, ...current];
         });
         setActiveConversationId(conversation.id);
+        loadMessages(conversation.id, { silent: true });
       })
       .catch((error) => {
         setStatus(error?.payload?.detail || error?.message || 'Could not start the conversation.');

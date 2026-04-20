@@ -861,6 +861,10 @@ def create_tailoring_request(user, data):
     document = _build_request_doc(user, data, measurement=measurement, vendor=vendor, assigned_tailor=assigned_tailor, tailor_profile=tailor_profile)
     tailoring_requests_collection().insert_one(prepare_document_for_mongo(document))
     created = _normalize_tailoring_request_document(document)
+    if created.get("tailor_id") or created.get("assigned_tailor"):
+        from apps.chats.repository import ensure_tailor_request_conversation
+
+        ensure_tailor_request_conversation(created)
     _notify_tailoring_created(created)
     return created
 
@@ -882,7 +886,12 @@ def update_tailoring_request(user, request_id, updates):
     if "assigned_tailor" in payload and payload.get("assigned_tailor") and "status" not in payload:
         payload["status"] = "assigned"
     tailoring_requests_collection().update_one({"id": document["id"]}, {"$set": prepare_document_for_mongo(payload)})
-    return get_tailoring_request_for_user(user, document["id"])
+    updated = get_tailoring_request_for_user(user, document["id"])
+    if updated and (updated.get("tailor_id") or updated.get("assigned_tailor")):
+        from apps.chats.repository import ensure_tailor_request_conversation
+
+        ensure_tailor_request_conversation(updated)
+    return updated
 
 
 def list_tailoring_messages(user, request_id=None):

@@ -306,60 +306,140 @@ def _ensure_tailor_request_conversations_for_user(user):
     from apps.tailoring.repository import list_tailoring_requests
 
     for request_document in list_tailoring_requests(user):
-        tailor_user_id = _to_int_or_none(request_document.get("tailor_id") or request_document.get("assigned_tailor"))
-        if not tailor_user_id:
-            continue
-        customer_user_id = _to_int_or_none(request_document.get("user"))
+        ensure_tailor_request_conversation(request_document, actor=user)
+
+
+def ensure_tailor_request_conversation(request_document, actor=None):
+    tailor_user_id = _to_int_or_none(request_document.get("tailor_id") or request_document.get("assigned_tailor"))
+    if not tailor_user_id:
+        return None
+    customer_user_id = _to_int_or_none(request_document.get("customer_id") or request_document.get("user"))
+    if not customer_user_id:
+        return None
+    if actor and actor.role == "tailor" and tailor_user_id != int(actor.id):
+        return None
+    if actor and actor.role == "customer" and customer_user_id != int(actor.id):
+        return None
+    payload = {
+        "kind": "customer_tailor",
+        "customer_user_id": customer_user_id,
+        "tailor_user_id": tailor_user_id,
+        "vendor_user_id": None,
+        "product_id": None,
+        "order_id": None,
+        "return_request_id": None,
+        "tailoring_request_id": int(request_document["id"]),
+    }
+    existing = conversations_collection().find_one(_conversation_query_for_payload(payload))
+    if existing:
+        return clean_document(existing)
+    details = _context_details(payload)
+    document = {
+        "id": next_sequence("chat_conversations"),
+        "kind": "customer_tailor",
+        "participant_user_ids": [payload["customer_user_id"], payload["tailor_user_id"]],
+        "customer_user_id": payload["customer_user_id"],
+        "customer_detail": details["customer_detail"],
+        "vendor_user_id": None,
+        "vendor_id": None,
+        "vendor_detail": None,
+        "tailor_user_id": payload["tailor_user_id"],
+        "tailor_detail": details["tailor_detail"],
+        "product_id": None,
+        "product_detail": None,
+        "order_id": None,
+        "order_detail": None,
+        "return_request_id": None,
+        "return_request_detail": None,
+        "tailoring_request_id": payload["tailoring_request_id"],
+        "tailoring_request_detail": details["tailoring_request_detail"],
+        "created_at": utcnow(),
+        "updated_at": utcnow(),
+        "last_message_at": None,
+        "last_message_preview": "",
+    }
+    conversations_collection().insert_one(prepare_document_for_mongo(document))
+    return document
+
+
+def _vendor_user_ids_for_order(order):
+    vendor_user_ids = set()
+    for vendor_user_id in order.get("vendor_user_ids") or []:
+        vendor_user_id = _to_int_or_none(vendor_user_id)
+        if vendor_user_id:
+            vendor_user_ids.add(vendor_user_id)
+    for item in order.get("items") or []:
+        vendor_user_id = (
+            item.get("vendor_user_id")
+            or item.get("vendor_user")
+            or _mapping_or_empty(item.get("vendor_detail")).get("user")
+            or _mapping_or_empty(_mapping_or_empty(item.get("product_detail")).get("vendor_detail")).get("user")
+        )
+        vendor_user_id = _to_int_or_none(vendor_user_id)
+        if vendor_user_id:
+            vendor_user_ids.add(vendor_user_id)
+    return sorted(vendor_user_ids)
+
+
+def _ensure_vendor_order_conversations_for_user(user):
+    if user.role not in {"customer", "vendor"}:
+        return
+    from apps.orders.repository import list_orders
+
+    for order in list_orders(user):
+        customer_user_id = _to_int_or_none(order.get("customer_id") or order.get("user_id"))
         if not customer_user_id:
             continue
-        if user.role == "tailor" and tailor_user_id != int(user.id):
-            continue
-        if user.role == "customer" and customer_user_id != int(user.id):
-            continue
-        payload = {
-            "kind": "customer_tailor",
-            "customer_user_id": customer_user_id,
-            "tailor_user_id": tailor_user_id,
-            "vendor_user_id": None,
-            "product_id": None,
-            "order_id": None,
-            "return_request_id": None,
-            "tailoring_request_id": int(request_document["id"]),
-        }
-        if conversations_collection().find_one(_conversation_query_for_payload(payload)):
-            continue
-        details = _context_details(payload)
-        document = {
-            "id": next_sequence("chat_conversations"),
-            "kind": "customer_tailor",
-            "participant_user_ids": [payload["customer_user_id"], payload["tailor_user_id"]],
-            "customer_user_id": payload["customer_user_id"],
-            "customer_detail": details["customer_detail"],
-            "vendor_user_id": None,
-            "vendor_id": None,
-            "vendor_detail": None,
-            "tailor_user_id": payload["tailor_user_id"],
-            "tailor_detail": details["tailor_detail"],
-            "product_id": None,
-            "product_detail": None,
-            "order_id": None,
-            "order_detail": None,
-            "return_request_id": None,
-            "return_request_detail": None,
-            "tailoring_request_id": payload["tailoring_request_id"],
-            "tailoring_request_detail": details["tailoring_request_detail"],
-            "created_at": utcnow(),
-            "updated_at": utcnow(),
-            "last_message_at": None,
-            "last_message_preview": "",
-        }
-        conversations_collection().insert_one(prepare_document_for_mongo(document))
+        for vendor_user_id in _vendor_user_ids_for_order(order):
+            if user.role == "customer" and customer_user_id != int(user.id):
+                continue
+            if user.role == "vendor" and vendor_user_id != int(user.id):
+                continue
+            payload = {
+                "kind": "customer_vendor",
+                "customer_user_id": customer_user_id,
+                "vendor_user_id": vendor_user_id,
+                "tailor_user_id": None,
+                "product_id": None,
+                "order_id": int(order["id"]),
+                "return_request_id": None,
+                "tailoring_request_id": None,
+            }
+            if conversations_collection().find_one(_conversation_query_for_payload(payload)):
+                continue
+            details = _context_details(payload)
+            document = {
+                "id": next_sequence("chat_conversations"),
+                "kind": "customer_vendor",
+                "participant_user_ids": [payload["customer_user_id"], payload["vendor_user_id"]],
+                "customer_user_id": payload["customer_user_id"],
+                "customer_detail": details["customer_detail"],
+                "vendor_user_id": payload["vendor_user_id"],
+                "vendor_id": details.get("vendor_id"),
+                "vendor_detail": details["vendor_detail"],
+                "tailor_user_id": None,
+                "tailor_detail": None,
+                "product_id": None,
+                "product_detail": None,
+                "order_id": payload["order_id"],
+                "order_detail": details["order_detail"],
+                "return_request_id": None,
+                "return_request_detail": None,
+                "tailoring_request_id": None,
+                "tailoring_request_detail": None,
+                "created_at": utcnow(),
+                "updated_at": utcnow(),
+                "last_message_at": None,
+                "last_message_preview": "",
+            }
+            conversations_collection().insert_one(prepare_document_for_mongo(document))
 
 
 def list_conversations(user, params=None):
     params = params or {}
-    # Ensure tailoring-request conversations exist for the user so threads appear
-    # even when the frontend does not explicitly filter by kind.
+    # Ensure workflow conversations exist even when the frontend did not
+    # explicitly create them from a button click.
+    _ensure_vendor_order_conversations_for_user(user)
     _ensure_tailor_request_conversations_for_user(user)
     documents = [clean_document(item) for item in conversations_collection().find({}, sort=[("updated_at", -1), ("id", -1)])]
     documents = [item for item in documents if _conversation_accessible(user, item)]

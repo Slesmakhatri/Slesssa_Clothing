@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsAdminRole, IsSuperAdminRole, IsTailorOrAdmin, IsVendorOrAdmin
 from apps.accounts.repository import list_users
+from apps.chats.repository import list_conversations
 from apps.orders.repository import list_orders, list_return_requests, list_wishlist_items
 from apps.payments.repository import list_payments
 from apps.products.repository import list_products
@@ -312,17 +313,19 @@ class TailorDashboardAPIView(APIView):
 
     def get(self, request):
         requests = list_tailoring_requests(request.user)
+        conversations = list_conversations(request.user, {"kind": "customer_tailor"})
         total_requests = len(requests)
         completed_requests = len([item for item in requests if item.get("status") == "completed"])
+        active_statuses = {"accepted", "in_progress", "cutting", "stitching", "fitting", "discussion_ongoing"}
         completion_rate = round((completed_requests / total_requests) * 100, 1) if total_requests else 0
         return Response(
             {
                 "assigned_requests": total_requests,
                 "pending_requests": len([item for item in requests if item.get("status") in {"pending", "request_sent"}]),
                 "assigned_status_requests": len([item for item in requests if item.get("status") == "assigned"]),
-                "discussion_requests": len([item for item in requests if item.get("status") == "discussion_ongoing"]),
+                "discussion_requests": len(conversations),
                 "accepted_requests": len([item for item in requests if item.get("status") == "accepted"]),
-                "in_progress_requests": len([item for item in requests if item.get("status") == "in_progress"]),
+                "in_progress_requests": len([item for item in requests if item.get("status") in active_statuses]),
                 "completed_requests": completed_requests,
                 "completion_rate": completion_rate,
                 "status_breakdown": [
@@ -331,9 +334,13 @@ class TailorDashboardAPIView(APIView):
                     {"status": "discussion_ongoing", "count": len([item for item in requests if item.get("status") == "discussion_ongoing"])},
                     {"status": "accepted", "count": len([item for item in requests if item.get("status") == "accepted"])},
                     {"status": "in_progress", "count": len([item for item in requests if item.get("status") == "in_progress"])},
+                    {"status": "cutting", "count": len([item for item in requests if item.get("status") == "cutting"])},
+                    {"status": "stitching", "count": len([item for item in requests if item.get("status") == "stitching"])},
+                    {"status": "fitting", "count": len([item for item in requests if item.get("status") == "fitting"])},
                     {"status": "completed", "count": completed_requests},
                 ],
                 "recent_requests": requests[:8],
+                "conversation_count": len(conversations),
             }
         )
 

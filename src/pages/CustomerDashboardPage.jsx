@@ -9,6 +9,18 @@ import { useWishlist } from '../context/WishlistContext';
 import { createReturnRequest, deleteProductQuestion, deleteReview, getDashboardSummary, listOrders, listProductQuestions, listProducts, listReturnRequests, listReviews, listTailoringRequests, listVouchers, updateProductQuestion, updateReview } from '../services/api';
 import { normalizeProduct } from '../services/catalog';
 
+function getOrderVendorUserIds(order) {
+  const ids = new Set();
+  (order.vendor_user_ids || []).forEach((id) => {
+    if (id) ids.add(String(id));
+  });
+  (order.items || []).forEach((item) => {
+    const vendorUserId = item.vendor_user_id || item.vendor_user || item.vendor_detail?.user || item.product_detail?.vendor_detail?.user;
+    if (vendorUserId) ids.add(String(vendorUserId));
+  });
+  return Array.from(ids);
+}
+
 function CustomerDashboardPage() {
   const { user } = useAuth();
   const { items: wishlistItems } = useWishlist();
@@ -178,17 +190,35 @@ function CustomerDashboardPage() {
                 <SectionTitle eyebrow="Order History" title="Your latest orders" align="start" />
                 <table className="table align-middle mb-0">
                   <thead>
-                    <tr><th>Order</th><th>Status</th><th>Payment</th><th>Amount</th></tr>
+                    <tr><th>Order</th><th>Status</th><th>Payment</th><th>Amount</th><th>Vendor Chat</th></tr>
                   </thead>
                   <tbody>
-                    {orders.map((item) => (
-                      <tr key={item.id}>
-                        <td><Link to={`/track-order?order=${item.id}`}>{item.order_number}</Link></td>
-                        <td>{item.status}</td>
-                        <td>{item.payment_status || item.payment_method}</td>
-                        <td>NPR {Number(item.total).toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {orders.map((item) => {
+                      const vendorUserIds = getOrderVendorUserIds(item);
+                      return (
+                        <tr key={item.id}>
+                          <td><Link to={`/track-order?order=${item.id}`}>{item.order_number}</Link></td>
+                          <td>{item.status}</td>
+                          <td>{item.payment_status || item.payment_method}</td>
+                          <td>NPR {Number(item.total).toLocaleString()}</td>
+                          <td>
+                            <div className="d-flex flex-column align-items-start gap-1">
+                              {vendorUserIds.length ? vendorUserIds.map((vendorUserId, index) => (
+                                <Link
+                                  key={`${item.id}-${vendorUserId}`}
+                                  to={`/messages?kind=customer_vendor&vendor_user_id=${vendorUserId}&order_id=${item.id}`}
+                                  className="btn btn-link p-0"
+                                >
+                                  Chat with Vendor{vendorUserIds.length > 1 ? ` ${index + 1}` : ''}
+                                </Link>
+                              )) : (
+                                <span className="text-muted small">No vendor linked</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
