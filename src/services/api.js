@@ -625,17 +625,19 @@ export async function listVouchers() {
   return unwrapListResponse(payload);
 }
 
-export async function createProduct(formData) {
+export async function createProduct(payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
   return apiRequest('/products/', {
     method: 'POST',
-    body: formData
+    body: isFormData ? payload : JSON.stringify(payload)
   });
 }
 
-export async function updateProduct(slug, formData) {
+export async function updateProduct(slug, payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
   return apiRequest(`/products/${slug}/`, {
     method: 'PATCH',
-    body: formData
+    body: isFormData ? payload : JSON.stringify(payload)
   });
 }
 
