@@ -436,6 +436,33 @@ function VendorDashboardWorkspace({
       }
 
       // If there's a file to upload, use FormData and append types carefully
+      // Validate core fields before attempting submit
+      const allowedTypes = ['ready_made', 'customizable', 'both'];
+      if (!payload.category || Number.isNaN(Number(payload.category))) {
+        setProductErrors({ category: ['A valid category is required.'] });
+        setError('Please select a valid category.');
+        setSavingSection('');
+        return;
+      }
+      if (Number.isNaN(Number(payload.price))) {
+        setProductErrors({ price: ['Price must be a number.'] });
+        setError('Please enter a valid price.');
+        setSavingSection('');
+        return;
+      }
+      if (Number.isNaN(Number(payload.stock))) {
+        setProductErrors({ stock: ['Stock must be an integer.'] });
+        setError('Please enter a valid stock quantity.');
+        setSavingSection('');
+        return;
+      }
+      if (!allowedTypes.includes(String(payload.product_type))) {
+        setProductErrors({ product_type: [`product_type must be one of: ${allowedTypes.join(', ')}`] });
+        setError('Invalid product type selected.');
+        setSavingSection('');
+        return;
+      }
+
       if (productForm.main_image) {
         const formData = new FormData();
         // primitives
@@ -456,6 +483,22 @@ function VendorDashboardWorkspace({
         (payload.fabric_options || []).forEach((f) => formData.append('fabric_options', f));
         formData.append('main_image', productForm.main_image);
 
+        if (import.meta.env.DEV) {
+          console.debug('FormData payload fields (as strings):', {
+            vendor: typeof String(payload.vendor) === 'string' ? String(payload.vendor) : payload.vendor,
+            category: String(payload.category),
+            name: payload.name,
+            price: String(payload.price),
+            stock: String(payload.stock),
+            product_type: payload.product_type,
+            is_customizable: typeof payload.is_customizable,
+            is_active: typeof payload.is_active,
+            sizes: payload.sizes,
+            colors: payload.colors,
+            fabric_options: payload.fabric_options
+          });
+        }
+
         if (editingProductSlug) {
           await updateProduct(editingProductSlug, formData);
           pushNotice('Product updated.');
@@ -465,6 +508,20 @@ function VendorDashboardWorkspace({
         }
       } else {
         // send JSON payload (no file)
+        if (import.meta.env.DEV) {
+          console.debug('JSON payload types:', {
+            vendor: typeof payload.vendor,
+            category: typeof payload.category,
+            name: typeof payload.name,
+            description: typeof payload.description,
+            price: typeof payload.price,
+            stock: typeof payload.stock,
+            product_type: typeof payload.product_type,
+            is_customizable: typeof payload.is_customizable,
+            is_active: typeof payload.is_active
+          });
+        }
+
         if (editingProductSlug) {
           await updateProduct(editingProductSlug, payload);
           pushNotice('Product updated.');
@@ -844,19 +901,20 @@ function VendorDashboardWorkspace({
                   Category
                   <select value={productForm.category} onChange={(event) => setProductForm((current) => ({ ...current, category: event.target.value }))} required>
                     <option value="">Select category</option>
-                    {categories.length === 0 ? (
-                      <option value="" disabled>No categories available</option>
-                    ) : (
-                      categories.map((category) => {
-                        const id = category.id || category._id || category._id_str || category.slug || category.name;
-                        const label = category.name || category.label || category.title || category.slug || String(id);
-                        return (
-                          <option key={id} value={id}>
-                            {label}
-                          </option>
-                        );
-                      })
-                    )}
+                      {categories.length === 0 ? (
+                        <option value="" disabled>No categories available</option>
+                      ) : (
+                        categories.map((category) => {
+                          // Use numeric category.id if present; fallback to slug otherwise (but backend expects integer id)
+                          const id = category.id ?? category._id ?? null;
+                          const label = category.name ?? category.label ?? String(id ?? 'Unknown');
+                          return (
+                            <option key={id ?? label} value={id ?? ''}>
+                              {label}
+                            </option>
+                          );
+                        })
+                      )}
                   </select>
                   {productErrors.category ? <div className="vendor-help text-danger">{(productErrors.category || []).join(' ')}</div> : null}
                   {categories.length === 0 ? <div className="vendor-help text-muted">No categories available. Please ask admin to create categories first.</div> : null}
