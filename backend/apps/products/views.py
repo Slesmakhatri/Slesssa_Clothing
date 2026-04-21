@@ -105,7 +105,21 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(ProductSerializer(product, context={"request": request}).data)
 
     def create(self, request):
+        # Debug: log incoming request data to help identify payload shape/type issues
+        try:
+            print('DEBUG: Incoming product create request.data ->', dict(request.data))
+        except Exception:
+            print('DEBUG: Unable to cast request.data to dict for logging')
         payload = dict(request.data)
+        # Detailed debug of incoming keys and value types
+        try:
+            for k, v in request.data.items():
+                try:
+                    print(f"DEBUG FIELD: {k} -> type={type(v).__name__} value={v}")
+                except Exception:
+                    print(f"DEBUG FIELD: {k} -> (unprintable value)")
+        except Exception:
+            print('DEBUG: unable to iterate request.data')
         if "main_image" in request.FILES:
             payload["main_image"] = store_uploaded_file(request.FILES["main_image"], "products/main")
         serializer = ProductSerializer(data=payload)
