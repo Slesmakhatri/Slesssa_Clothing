@@ -300,6 +300,9 @@ export async function listProducts(params = {}) {
     const payload = await apiRequest(`/products/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
     return unwrapListResponse(payload);
   } catch {
+    if (params.mine) {
+      return [];
+    }
     return storefrontProducts;
   }
 }
