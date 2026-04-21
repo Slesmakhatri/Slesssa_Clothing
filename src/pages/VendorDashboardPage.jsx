@@ -10,6 +10,7 @@ const VENDOR_SECTION_BY_ROUTE = {
   returns: 'returns',
   'reviews-questions': 'reviews',
   messages: 'messages',
+  support: 'messages',
   payouts: 'payouts',
   settings: 'settings'
 };
@@ -17,8 +18,16 @@ const VENDOR_SECTION_BY_ROUTE = {
 function VendorDashboardPage() {
   const { section } = useParams();
   const initialSection = VENDOR_SECTION_BY_ROUTE[section] || 'dashboard';
+  const initialMessageMode = section === 'support' ? 'admin' : 'customers';
 
-  return <VendorDashboardWorkspace initialSection={initialSection} showInternalNav={false} showWorkspaceHeader={false} />;
+  return (
+    <VendorDashboardWorkspace
+      initialSection={initialSection}
+      initialMessageMode={initialMessageMode}
+      showInternalNav={false}
+      showWorkspaceHeader={false}
+    />
+  );
 }
 
 export default VendorDashboardPage;
