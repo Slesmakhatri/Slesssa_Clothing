@@ -22,7 +22,7 @@ class ProductImageSerializer(serializers.Serializer):
 
 class ProductSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
-    vendor = serializers.IntegerField()
+    vendor = serializers.IntegerField(required=False)
     vendor_detail = VendorProfileSerializer(read_only=True)
     category = serializers.IntegerField()
     category_detail = CategorySerializer(read_only=True)
