@@ -8,13 +8,14 @@ import { listProducts } from '../services/api';
 import { buildCuratedCollections } from '../services/catalog';
 
 const INITIAL_VISIBLE_COUNT = 12;
+const FALLBACK_CATALOG = buildCuratedCollections(storefrontProducts).catalog;
 
 function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
-  const [catalog, setCatalog] = useState(storefrontProducts);
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [sortValue, setSortValue] = useState('featured');
@@ -41,7 +42,20 @@ function ShopPage() {
     listProducts()
       .then((items) => {
         if (active) {
-          setCatalog(buildCuratedCollections(items).catalog);
+          const apiItems = Array.isArray(items) ? items : [];
+          const nextCatalog = apiItems.length ? buildCuratedCollections(apiItems).catalog : FALLBACK_CATALOG;
+          if (import.meta.env.DEV) {
+            console.debug('ShopPage products API response', {
+              count: apiItems.length,
+              sample: apiItems[0] || null
+            });
+          }
+          setCatalog(nextCatalog);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCatalog(FALLBACK_CATALOG);
         }
       })
       .finally(() => {
@@ -167,6 +181,18 @@ function ShopPage() {
       return right.popularity - left.popularity;
     });
 
+    if (import.meta.env.DEV) {
+      console.debug('ShopPage filter state', {
+        catalogCount: catalog.length,
+        searchValue,
+        sortValue,
+        filters,
+        priceRange,
+        filteredCount: nextProducts.length,
+        firstFilteredProduct: nextProducts[0] || null
+      });
+    }
+
     return nextProducts;
   }, [catalog, filters, priceRange, searchValue, sortValue]);
 
@@ -256,7 +282,7 @@ function ShopPage() {
               ) : visibleProducts.length ? (
                 <div className="shop-product-grid">
                   {visibleProducts.map((product) => (
-                    <div key={product.slug}>
+                    <div key={product.slug || product.id}>
                       <ProductCard product={product} onQuickView={setSelectedProduct} />
                     </div>
                   ))}

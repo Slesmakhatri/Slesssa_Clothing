@@ -53,21 +53,58 @@ export function getProductDetailPath(product) {
   return identifier ? `/shop/${encodeURIComponent(identifier)}` : '/shop';
 }
 
+export function resolveProductMediaUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+
+  const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+  if (typeof window === 'undefined') return normalizedPath;
+
+  const backendOrigin = import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : `${window.location.protocol}//${window.location.hostname}:8000`;
+
+  if (normalizedPath.startsWith('/media/')) {
+    return `${backendOrigin}${normalizedPath}`;
+  }
+
+  return normalizedPath;
+}
+
+function getNestedImageValue(image) {
+  if (!image) return '';
+  if (typeof image === 'string') return resolveProductMediaUrl(image);
+  return resolveProductMediaUrl(
+    image.url ||
+    image.image ||
+    image.src ||
+    image.path ||
+    image.file ||
+    ''
+  );
+}
+
 export function getProductImage(product) {
-  if (product?.image_url) {
-    return product.image_url;
-  }
+  const candidates = [
+    product?.image_url,
+    product?.main_image,
+    product?.thumbnail,
+    product?.featured_image,
+    product?.image,
+    product?.primary_image,
+    product?.cover_image,
+    product?.gallery?.[0]
+  ]
+    .map(resolveProductMediaUrl)
+    .filter(Boolean);
 
-  if (product?.image) {
-    return product.image;
-  }
+  if (candidates.length) return candidates[0];
 
-  if (product?.images?.length) {
-    if (typeof product.images[0] === 'string') {
-      return product.images[0];
-    }
-
-    return product.images.find((image) => image.is_primary)?.image || product.images[0].image;
+  if (Array.isArray(product?.images) && product.images.length) {
+    const primaryImage = product.images.find((image) => image?.is_primary || image?.primary || image?.featured);
+    const nested = getNestedImageValue(primaryImage) || getNestedImageValue(product.images[0]);
+    if (nested) return nested;
   }
 
   return getCategoryFallbackImage(product);
@@ -75,15 +112,17 @@ export function getProductImage(product) {
 
 export function getProductHoverImage(product) {
   if (product?.hoverImage) {
-    return product.hoverImage;
+    return resolveProductMediaUrl(product.hoverImage);
   }
 
-  if (product?.images?.length) {
-    if (typeof product.images[0] === 'string') {
-      return product.images[1] || product.images[0];
-    }
+  if (Array.isArray(product?.gallery) && product.gallery.length > 1) {
+    return resolveProductMediaUrl(product.gallery[1]) || resolveProductMediaUrl(product.gallery[0]) || getProductImage(product);
+  }
 
-    return product.images[1]?.image || product.images[0]?.image || getProductImage(product);
+  if (Array.isArray(product?.images) && product.images.length) {
+    const secondImage = getNestedImageValue(product.images[1]);
+    const firstImage = getNestedImageValue(product.images[0]);
+    return secondImage || firstImage || getProductImage(product);
   }
 
   return getProductImage(product);
@@ -91,15 +130,15 @@ export function getProductHoverImage(product) {
 
 export function getProductGallery(product) {
   if (product?.gallery?.length) {
-    return product.gallery;
+    const resolvedGallery = product.gallery.map(resolveProductMediaUrl).filter(Boolean);
+    if (resolvedGallery.length) return resolvedGallery;
   }
 
-  if (product?.images?.length) {
-    if (typeof product.images[0] === 'string') {
-      return product.images;
-    }
-
-    return product.images.map((image) => image.image);
+  if (Array.isArray(product?.images) && product.images.length) {
+    const resolvedImages = product.images
+      .map(getNestedImageValue)
+      .filter(Boolean);
+    if (resolvedImages.length) return resolvedImages;
   }
 
   return [getProductImage(product)];
