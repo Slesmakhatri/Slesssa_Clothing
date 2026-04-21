@@ -298,8 +298,7 @@ export async function listProducts(params = {}) {
       Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
     );
     const payload = await apiRequest(`/products/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
-    const items = unwrapListResponse(payload);
-    return items.length ? items : storefrontProducts;
+    return unwrapListResponse(payload);
   } catch {
     return storefrontProducts;
   }
@@ -353,30 +352,33 @@ export async function updateVendorApplication(payload) {
 export async function updateVendorProfile(slug, formData) {
   return apiRequest(`/vendors/${slug}/`, {
     method: 'PATCH',
-    body: formData
+    body: formData,
+    requiresAuth: true
   });
 }
 
 export async function updateVendorStatus(slug, approvalStatus) {
   return apiRequest(`/vendors/${slug}/`, {
     method: 'PATCH',
-    body: JSON.stringify({ approval_status: approvalStatus })
+    body: JSON.stringify({ approval_status: approvalStatus }),
+    requiresAuth: true
   });
 }
 
 export async function listOrders() {
-  const payload = await apiRequest('/orders/');
+  const payload = await apiRequest('/orders/', { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
 export async function getOrder(id) {
-  return apiRequest(`/orders/${id}/`);
+  return apiRequest(`/orders/${id}/`, { requiresAuth: true });
 }
 
 export async function updateOrderStatus(id, payload) {
   return apiRequest(`/orders/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    requiresAuth: true
   });
 }
 
@@ -629,7 +631,8 @@ export async function createProduct(payload) {
   const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
   return apiRequest('/products/', {
     method: 'POST',
-    body: isFormData ? payload : JSON.stringify(payload)
+    body: isFormData ? payload : JSON.stringify(payload),
+    requiresAuth: true
   });
 }
 
@@ -637,18 +640,20 @@ export async function updateProduct(slug, payload) {
   const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
   return apiRequest(`/products/${slug}/`, {
     method: 'PATCH',
-    body: isFormData ? payload : JSON.stringify(payload)
+    body: isFormData ? payload : JSON.stringify(payload),
+    requiresAuth: true
   });
 }
 
 export async function deleteProduct(slug) {
   return apiRequest(`/products/${slug}/`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    requiresAuth: true
   });
 }
 
 export async function listSupportMessages() {
-  const payload = await apiRequest('/support-messages/');
+  const payload = await apiRequest('/support-messages/', { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
@@ -662,7 +667,8 @@ export async function createSupportMessage(payload) {
 export async function updateSupportMessage(id, payload) {
   return apiRequest(`/support-messages/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    requiresAuth: true
   });
 }
 
