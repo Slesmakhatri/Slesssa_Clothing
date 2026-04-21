@@ -111,7 +111,7 @@ def _conversation_accessible(user, conversation):
     if user.role == "super_admin":
         return True
     if user.role == "admin":
-        return False
+        return conversation.get("kind") == "vendor_admin" and user.id in (conversation.get("participant_user_ids") or [])
     return user.id in (conversation.get("participant_user_ids") or [])
 
 
@@ -124,7 +124,12 @@ def _conversation_query_for_payload(payload):
         query["vendor_user_id"] = payload["vendor_user_id"]
     if payload["kind"] == "customer_tailor":
         query["tailor_user_id"] = payload["tailor_user_id"]
-    for key in ("product_id", "order_id", "return_request_id", "tailoring_request_id"):
+    if payload["kind"] == "vendor_admin":
+        query.pop("customer_user_id", None)
+        query["vendor_user_id"] = payload["vendor_user_id"]
+        query["admin_user_id"] = payload["admin_user_id"]
+        query["support_topic"] = payload.get("support_topic", "")
+    for key in ("product_id", "order_id", "return_request_id", "tailoring_request_id", "custom_request_id"):
         query[key] = payload.get(key)
     return query
 
@@ -146,6 +151,10 @@ def _unread_count_for_user(conversation_id, user_id):
 
 
 def _counterparty_for_user(user, conversation):
+    if conversation.get("kind") == "vendor_admin":
+        if user.id == conversation.get("vendor_user_id"):
+            return conversation.get("admin_detail")
+        return conversation.get("vendor_detail")
     if user.id == conversation.get("customer_user_id"):
         return conversation.get("vendor_detail") or conversation.get("tailor_detail")
     return conversation.get("customer_detail")
@@ -161,7 +170,11 @@ def _context_summary(conversation):
         bits.append(conversation["tailoring_request_detail"].get("clothing_type", "Tailoring Request"))
     if conversation.get("return_request_detail"):
         bits.append(f"Return #{conversation['return_request_detail'].get('id')}")
-    return " · ".join([item for item in bits if item]) or "General conversation"
+    if conversation.get("support_topic"):
+        bits.append(str(conversation.get("support_topic")).replace("_", " ").title())
+    if conversation.get("subject"):
+        bits.append(conversation.get("subject"))
+    return " - ".join([item for item in bits if item]) or "General conversation"
 
 
 def _to_int_or_none(value):
@@ -175,6 +188,13 @@ def decorate_conversation_for_user(user, conversation):
     document = clean_document(conversation) if conversation else None
     if not document:
         return None
+    document.setdefault("admin_user_id", None)
+    document.setdefault("admin_detail", None)
+    document.setdefault("custom_request_id", document.get("tailoring_request_id"))
+    document.setdefault("support_topic", "")
+    document.setdefault("subject", "")
+    document.setdefault("is_closed", False)
+    document.setdefault("participant_user_ids", [])
     last_message = _latest_message_preview(document["id"])
     counterparty = _counterparty_for_user(user, document)
     return {
@@ -209,7 +229,8 @@ def _context_details(payload):
     from apps.vendors.repository import get_vendor_by_user_id
     from apps.accounts.repository import get_user_by_id
 
-    customer_user = get_user_by_id(payload["customer_user_id"])
+    customer_user = get_user_by_id(payload.get("customer_user_id")) if payload.get("customer_user_id") else None
+    admin_user = get_user_by_id(payload.get("admin_user_id")) if payload.get("admin_user_id") else None
     vendor_user = get_user_by_id(payload.get("vendor_user_id")) if payload.get("vendor_user_id") else None
     tailor_user = get_user_by_id(payload.get("tailor_user_id")) if payload.get("tailor_user_id") else None
     vendor = get_vendor_by_user_id(payload.get("vendor_user_id")) if payload.get("vendor_user_id") else None
@@ -221,6 +242,7 @@ def _context_details(payload):
 
     return {
         "customer_detail": _user_summary(customer_user),
+        "admin_detail": _user_summary(admin_user),
         "vendor_detail": _vendor_summary(vendor) if vendor else _user_summary(vendor_user),
         "tailor_detail": _tailor_summary(tailor_profile) if tailor_profile else _user_summary(tailor_user),
         "product_detail": _product_summary(product),
@@ -236,16 +258,19 @@ def validate_conversation_start(user, payload):
     from apps.products.repository import get_product_by_id
     from apps.tailoring.repository import get_tailoring_request_for_user
 
-    if user.role not in {"customer", "tailor"}:
-        raise ValueError("Only customers (for vendor chats) and assigned tailors (for tailor chats) can start conversations.")
+    if user.role not in {"customer", "tailor", "vendor", "admin", "super_admin"}:
+        raise ValueError("Your account cannot start conversations.")
 
     validated = {
         "kind": payload["kind"],
-        "customer_user_id": user.id,
+        "customer_user_id": user.id if user.role == "customer" else None,
         "product_id": payload.get("product_id"),
         "order_id": payload.get("order_id"),
         "return_request_id": payload.get("return_request_id"),
-        "tailoring_request_id": payload.get("tailoring_request_id"),
+        "tailoring_request_id": payload.get("tailoring_request_id") or payload.get("custom_request_id"),
+        "custom_request_id": payload.get("custom_request_id") or payload.get("tailoring_request_id"),
+        "subject": str(payload.get("subject") or "").strip(),
+        "support_topic": str(payload.get("support_topic") or "").strip(),
     }
 
     if payload["kind"] == "customer_vendor":
@@ -279,6 +304,7 @@ def validate_conversation_start(user, payload):
             raise ValueError("A valid vendor context is required to start this chat.")
         validated["vendor_user_id"] = int(vendor_user_id)
         validated["tailor_user_id"] = None
+        validated["admin_user_id"] = None
 
     if payload["kind"] == "customer_tailor":
         tailoring_request_id = payload.get("tailoring_request_id")
@@ -296,6 +322,49 @@ def validate_conversation_start(user, payload):
             validated["customer_user_id"] = int(tailoring_request["user"])
         validated["tailor_user_id"] = int(tailor_user_id)
         validated["vendor_user_id"] = None
+        validated["admin_user_id"] = None
+
+    if payload["kind"] == "vendor_admin":
+        from apps.accounts.repository import ROLE_ADMIN, ROLE_SUPER_ADMIN, get_user_by_id, list_users
+        from apps.vendors.repository import get_vendor_by_user_id
+
+        if user.role not in {"vendor", "admin", "super_admin"}:
+            raise ValueError("Only vendors and admins can use vendor support conversations.")
+        vendor_user_id = payload.get("vendor_user_id")
+        if user.role == "vendor":
+            vendor_user_id = user.id
+        if not vendor_user_id:
+            raise ValueError("Vendor context is required.")
+        vendor_user = get_user_by_id(vendor_user_id)
+        if not vendor_user or vendor_user.get("role") != "vendor":
+            raise ValueError("A valid vendor account is required.")
+
+        admin_user_id = payload.get("admin_user_id")
+        if user.role == "admin":
+            admin_user_id = admin_user_id or user.id
+            if int(admin_user_id) != int(user.id):
+                raise ValueError("Admins can only create support threads assigned to themselves.")
+        if user.role == "super_admin":
+            admin_user_id = admin_user_id or user.id
+        if not admin_user_id:
+            admins = [item for item in list_users() if item.get("role") in {ROLE_ADMIN, ROLE_SUPER_ADMIN} and item.get("is_active", True)]
+            if not admins:
+                raise ValueError("No admin account is available for support.")
+            admins.sort(key=lambda item: (0 if item.get("role") == ROLE_ADMIN else 1, item.get("id", 0)))
+            admin_user_id = admins[0]["id"]
+        admin_user = get_user_by_id(admin_user_id)
+        if not admin_user or admin_user.get("role") not in {ROLE_ADMIN, ROLE_SUPER_ADMIN}:
+            raise ValueError("A valid admin account is required.")
+        vendor = get_vendor_by_user_id(vendor_user_id)
+        validated.update({
+            "customer_user_id": None,
+            "vendor_user_id": int(vendor_user_id),
+            "vendor_id": (vendor or {}).get("id"),
+            "admin_user_id": int(admin_user_id),
+            "tailor_user_id": None,
+            "support_topic": validated["support_topic"] or "general_support",
+            "subject": validated["subject"] or "Vendor support request",
+        })
 
     return validated
 
@@ -343,6 +412,8 @@ def ensure_tailor_request_conversation(request_document, actor=None):
         "vendor_user_id": None,
         "vendor_id": None,
         "vendor_detail": None,
+        "admin_user_id": None,
+        "admin_detail": None,
         "tailor_user_id": payload["tailor_user_id"],
         "tailor_detail": details["tailor_detail"],
         "product_id": None,
@@ -353,6 +424,10 @@ def ensure_tailor_request_conversation(request_document, actor=None):
         "return_request_detail": None,
         "tailoring_request_id": payload["tailoring_request_id"],
         "tailoring_request_detail": details["tailoring_request_detail"],
+        "custom_request_id": payload["tailoring_request_id"],
+        "support_topic": "",
+        "subject": "",
+        "is_closed": False,
         "created_at": utcnow(),
         "updated_at": utcnow(),
         "last_message_at": None,
@@ -417,6 +492,8 @@ def _ensure_vendor_order_conversations_for_user(user):
                 "vendor_user_id": payload["vendor_user_id"],
                 "vendor_id": details.get("vendor_id"),
                 "vendor_detail": details["vendor_detail"],
+                "admin_user_id": None,
+                "admin_detail": None,
                 "tailor_user_id": None,
                 "tailor_detail": None,
                 "product_id": None,
@@ -427,6 +504,10 @@ def _ensure_vendor_order_conversations_for_user(user):
                 "return_request_detail": None,
                 "tailoring_request_id": None,
                 "tailoring_request_detail": None,
+                "custom_request_id": None,
+                "support_topic": "",
+                "subject": "",
+                "is_closed": False,
                 "created_at": utcnow(),
                 "updated_at": utcnow(),
                 "last_message_at": None,
@@ -470,9 +551,13 @@ def create_or_get_conversation(user, payload):
         return decorate_conversation_for_user(user, clean_document(existing))
 
     details = _context_details(validated)
-    participant_user_ids = [validated["customer_user_id"]]
+    participant_user_ids = []
+    if validated.get("customer_user_id"):
+        participant_user_ids.append(validated["customer_user_id"])
     if validated.get("vendor_user_id"):
         participant_user_ids.append(validated["vendor_user_id"])
+    if validated.get("admin_user_id"):
+        participant_user_ids.append(validated["admin_user_id"])
     if validated.get("tailor_user_id"):
         participant_user_ids.append(validated["tailor_user_id"])
 
@@ -485,6 +570,8 @@ def create_or_get_conversation(user, payload):
         "vendor_user_id": validated.get("vendor_user_id"),
         "vendor_id": details.get("vendor_id"),
         "vendor_detail": details["vendor_detail"],
+        "admin_user_id": validated.get("admin_user_id"),
+        "admin_detail": details["admin_detail"],
         "tailor_user_id": validated.get("tailor_user_id"),
         "tailor_detail": details["tailor_detail"],
         "product_id": validated.get("product_id"),
@@ -495,6 +582,10 @@ def create_or_get_conversation(user, payload):
         "return_request_detail": details["return_request_detail"],
         "tailoring_request_id": validated.get("tailoring_request_id"),
         "tailoring_request_detail": details["tailoring_request_detail"],
+        "custom_request_id": validated.get("custom_request_id"),
+        "support_topic": validated.get("support_topic", ""),
+        "subject": validated.get("subject", ""),
+        "is_closed": False,
         "created_at": utcnow(),
         "updated_at": utcnow(),
         "last_message_at": None,
@@ -526,6 +617,8 @@ def send_message(user, conversation_id, payload):
     conversation = get_conversation_for_user(user, conversation_id)
     if not conversation:
         return None
+    if conversation.get("is_closed"):
+        raise ValueError("This conversation is closed.")
     attachment = payload.get("attachment", "")
     document = _message_document(conversation, user, payload["body"], attachment=attachment)
     messages_collection().insert_one(prepare_document_for_mongo(document))
@@ -534,6 +627,25 @@ def send_message(user, conversation_id, payload):
         {"$set": prepare_document_for_mongo({"updated_at": utcnow(), "last_message_at": document["created_at"], "last_message_preview": document["body"][:140]})},
     )
     return clean_document(document)
+
+
+def set_conversation_closed(user, conversation_id, is_closed):
+    conversation_id = _to_int_or_none(conversation_id)
+    if conversation_id is None:
+        return None
+    conversation = get_conversation_for_user(user, conversation_id)
+    if not conversation:
+        return None
+    if conversation.get("kind") != "vendor_admin":
+        raise ValueError("Only vendor support conversations can be closed from this inbox.")
+    if user.role not in {"admin", "super_admin"}:
+        raise ValueError("Only admins can close or reopen vendor support conversations.")
+    conversations_collection().update_one(
+        {"id": conversation["id"]},
+        {"$set": prepare_document_for_mongo({"is_closed": bool(is_closed), "updated_at": utcnow()})},
+    )
+    updated = conversations_collection().find_one({"id": conversation["id"]})
+    return decorate_conversation_for_user(user, updated)
 
 
 def mark_conversation_read(user, conversation_id):

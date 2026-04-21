@@ -3,6 +3,7 @@ import AnalyticsBarList from '../components/dashboard/AnalyticsBarList';
 import AnalyticsTableCard from '../components/dashboard/AnalyticsTableCard';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import SectionTitle from '../components/common/SectionTitle';
+import ChatWorkspace from '../components/chat/ChatWorkspace';
 import {
   getDashboardSummary,
   listOrders,
@@ -364,6 +365,18 @@ function AdminDashboardPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+            <div className="col-12" id="vendor-support">
+              <div className="table-card">
+                <ChatWorkspace
+                  kind="vendor_admin"
+                  title="Vendor to Admin Support"
+                  description="Reply to vendor support conversations for payouts, disputes, product approvals, and platform issues."
+                  emptyTitle="No vendor support threads yet"
+                  emptyDescription="Vendor-created admin support conversations will appear here."
+                  allowClose
+                />
               </div>
             </div>
           </div>

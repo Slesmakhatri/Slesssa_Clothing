@@ -168,6 +168,12 @@ function VendorDashboardWorkspace({
     new_password: '',
     confirm_password: ''
   });
+  const [messageMode, setMessageMode] = useState('customers');
+  const [adminSupportForm, setAdminSupportForm] = useState({
+    support_topic: 'general_support',
+    subject: 'Vendor support request'
+  });
+  const [adminSupportPayload, setAdminSupportPayload] = useState(null);
 
   const vendorScopedItems = useMemo(() => {
     if (!user) return [];
@@ -548,6 +554,16 @@ function VendorDashboardWorkspace({
     } finally {
       setSavingSection('');
     }
+  }
+
+  function handleStartAdminSupport(event) {
+    event.preventDefault();
+    setMessageMode('admin');
+    setAdminSupportPayload({
+      kind: 'vendor_admin',
+      support_topic: adminSupportForm.support_topic,
+      subject: adminSupportForm.subject || 'Vendor support request'
+    });
   }
 
   if (loading) {
@@ -950,7 +966,44 @@ function VendorDashboardWorkspace({
           ) : null}
 
           {activeSection === 'messages' ? (
-            <div className="table-card">
+            <div className="vendor-section-stack">
+              <div className="table-card vendor-messaging-controls">
+                <VendorSectionHeader
+                  title="Messages"
+                  description="Reply to customers and contact admin support from one vendor inbox."
+                  action={
+                    <div className="vendor-message-tabs" role="tablist" aria-label="Message filters">
+                      <button type="button" className={messageMode === 'customers' ? 'active' : ''} onClick={() => setMessageMode('customers')}>
+                        Customers
+                      </button>
+                      <button type="button" className={messageMode === 'admin' ? 'active' : ''} onClick={() => setMessageMode('admin')}>
+                        Admin Support
+                      </button>
+                    </div>
+                  }
+                />
+                {messageMode === 'admin' ? (
+                  <form className="vendor-admin-support-form" onSubmit={handleStartAdminSupport}>
+                    <label>
+                      Support Topic
+                      <select value={adminSupportForm.support_topic} onChange={(event) => setAdminSupportForm((current) => ({ ...current, support_topic: event.target.value }))}>
+                        <option value="general_support">General Support</option>
+                        <option value="payout_issue">Payout Issue</option>
+                        <option value="order_dispute">Order Dispute</option>
+                        <option value="product_approval">Product Approval</option>
+                        <option value="technical_problem">Technical Problem</option>
+                      </select>
+                    </label>
+                    <label>
+                      Subject
+                      <input value={adminSupportForm.subject} onChange={(event) => setAdminSupportForm((current) => ({ ...current, subject: event.target.value }))} placeholder="What do you need help with?" />
+                    </label>
+                    <button type="submit" className="btn btn-dark">Contact Admin</button>
+                  </form>
+                ) : null}
+              </div>
+              <div className="table-card">
+                {messageMode === 'customers' ? (
               <ChatWorkspace
                 kind="customer_vendor"
                 title="Customer ↔ Vendor Messages"
@@ -958,6 +1011,17 @@ function VendorDashboardWorkspace({
                 emptyTitle="No customer conversations yet"
                 emptyDescription="New product and order-related chats will appear here."
               />
+                ) : (
+                  <ChatWorkspace
+                    kind="vendor_admin"
+                    autoStartPayload={adminSupportPayload}
+                    title="Vendor to Admin Support"
+                    description="Discuss payout issues, product approval, order disputes, and technical problems with platform admins."
+                    emptyTitle="No admin support threads yet"
+                    emptyDescription="Choose a topic above and contact admin to open a support conversation."
+                  />
+                )}
+              </div>
             </div>
           ) : null}
 

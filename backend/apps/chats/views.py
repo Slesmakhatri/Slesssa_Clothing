@@ -4,7 +4,15 @@ from rest_framework.views import APIView
 
 from common.storage import store_uploaded_file
 
-from .repository import create_or_get_conversation, get_conversation_for_user, list_conversations, list_messages_for_conversation, mark_conversation_read, send_message
+from .repository import (
+    create_or_get_conversation,
+    get_conversation_for_user,
+    list_conversations,
+    list_messages_for_conversation,
+    mark_conversation_read,
+    send_message,
+    set_conversation_closed,
+)
 from .serializers import ChatConversationCreateSerializer, ChatConversationSerializer, ChatMessageCreateSerializer, ChatMessageSerializer
 
 
@@ -56,11 +64,45 @@ class ChatMessageViewSet(viewsets.ViewSet):
             payload.pop("attachment", None)
         serializer = ChatMessageCreateSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
-        document = send_message(
-            request.user,
-            serializer.validated_data["conversation"],
-            {"body": serializer.validated_data["body"], "attachment": attachment},
-        )
+        try:
+            document = send_message(
+                request.user,
+                serializer.validated_data["conversation"],
+                {"body": serializer.validated_data["body"], "attachment": attachment},
+            )
+        except ValueError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        if not document:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ChatMessageSerializer(document).data, status=status.HTTP_201_CREATED)
+
+
+class ChatConversationMessagesAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk=None):
+        messages = list_messages_for_conversation(request.user, pk)
+        if messages is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ChatMessageSerializer(messages, many=True).data)
+
+    def post(self, request, pk=None):
+        payload = mutable_request_data(request)
+        attachment = ""
+        if "attachment" in request.FILES:
+            attachment = store_uploaded_file(request.FILES["attachment"], "chat/messages")
+            payload.pop("attachment", None)
+        payload["conversation"] = pk
+        serializer = ChatMessageCreateSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        try:
+            document = send_message(
+                request.user,
+                serializer.validated_data["conversation"],
+                {"body": serializer.validated_data["body"], "attachment": attachment},
+            )
+        except ValueError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         if not document:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(ChatMessageSerializer(document).data, status=status.HTTP_201_CREATED)
@@ -71,6 +113,19 @@ class ChatConversationReadAPIView(APIView):
 
     def post(self, request, pk=None):
         conversation = mark_conversation_read(request.user, pk)
+        if not conversation:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ChatConversationSerializer(conversation).data)
+
+
+class ChatConversationCloseAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk=None):
+        try:
+            conversation = set_conversation_closed(request.user, pk, request.data.get("is_closed", True))
+        except ValueError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         if not conversation:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(ChatConversationSerializer(conversation).data)

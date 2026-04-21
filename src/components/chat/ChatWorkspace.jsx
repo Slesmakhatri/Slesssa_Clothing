@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createChatConversation, listChatConversations, listChatMessages, markChatConversationRead, sendChatMessage } from '../../services/api';
+import {
+  createChatConversation,
+  listChatConversations,
+  listChatMessages,
+  markChatConversationRead,
+  sendChatMessage,
+  setChatConversationClosed
+} from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 function formatTimestamp(value) {
@@ -21,6 +28,7 @@ function ChatWorkspace({
   autoStartPayload = null,
   emptyTitle = 'No conversations yet',
   emptyDescription = 'Messages will appear here once a conversation is started.',
+  allowClose = false,
   pollMs = 12000,
 }) {
   const { user } = useAuth();
@@ -157,6 +165,17 @@ function ChatWorkspace({
     }
   }
 
+  async function handleToggleClosed() {
+    if (!activeConversation) return;
+    setStatus('');
+    try {
+      const updated = await setChatConversationClosed(activeConversation.id, !activeConversation.is_closed);
+      setConversations((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      setStatus(error?.payload?.detail || error?.message || 'Could not update conversation status.');
+    }
+  }
+
   return (
     <div className="chat-workspace">
       <div className="chat-workspace__header">
@@ -218,6 +237,13 @@ function ChatWorkspace({
                   </strong>
                   <span>{activeConversation.context_summary}</span>
                 </div>
+                {allowClose ? (
+                  <button type="button" className="btn btn-sm btn-slessaa btn-slessaa-outline" onClick={handleToggleClosed}>
+                    {activeConversation.is_closed ? 'Reopen' : 'Close'}
+                  </button>
+                ) : activeConversation.is_closed ? (
+                  <span className="status-pill status-completed">Closed</span>
+                ) : null}
               </div>
 
               <div className="chat-thread__messages">
@@ -247,21 +273,25 @@ function ChatWorkspace({
                 <div ref={messagesEndRef}></div>
               </div>
 
-              <form className="chat-thread__composer" onSubmit={handleSendMessage}>
-                <textarea
-                  className="form-control premium-input premium-textarea"
-                  rows="3"
-                  value={messageBody}
-                  onChange={(event) => setMessageBody(event.target.value)}
-                  placeholder="Write your message..."
-                ></textarea>
-                <div className="chat-thread__composer-actions">
-                  <input type="file" accept="image/*,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] || null)} />
-                  <button type="submit" className="btn btn-slessaa btn-slessaa-primary" disabled={sending || !messageBody.trim()}>
-                    {sending ? 'Sending...' : 'Send Message'}
-                  </button>
-                </div>
-              </form>
+              {activeConversation.is_closed ? (
+                <div className="empty-state-sm">This conversation is closed. Reopen it before sending another reply.</div>
+              ) : (
+                <form className="chat-thread__composer" onSubmit={handleSendMessage}>
+                  <textarea
+                    className="form-control premium-input premium-textarea"
+                    rows="3"
+                    value={messageBody}
+                    onChange={(event) => setMessageBody(event.target.value)}
+                    placeholder="Write your message..."
+                  ></textarea>
+                  <div className="chat-thread__composer-actions">
+                    <input type="file" accept="image/*,.pdf" onChange={(event) => setAttachment(event.target.files?.[0] || null)} />
+                    <button type="submit" className="btn btn-slessaa btn-slessaa-primary" disabled={sending || !messageBody.trim()}>
+                      {sending ? 'Sending...' : 'Send Message'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </>
           ) : (
             <div className="filter-empty-state h-100">

@@ -3,10 +3,10 @@ import { useAuth } from '../../context/AuthContext';
 import { createTailoringMessage } from '../../services/api';
 
 const STATUS_OPTIONS = [
-  { value: 'request_sent', label: 'Request Sent' },
-  { value: 'discussion_ongoing', label: 'Discussion Ongoing' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'in_progress', label: 'In Progress' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'cutting', label: 'Cutting' },
+  { value: 'stitching', label: 'Stitching' },
+  { value: 'fitting', label: 'Fitting' },
   { value: 'completed', label: 'Completed' }
 ];
 

@@ -695,6 +695,14 @@ export async function markChatConversationRead(id) {
   });
 }
 
+export async function setChatConversationClosed(id, isClosed = true) {
+  return apiRequest(`/chat/conversations/${id}/close/`, {
+    method: 'POST',
+    body: JSON.stringify({ is_closed: isClosed }),
+    requiresAuth: true
+  });
+}
+
 export async function listTailorProfiles(params = {}) {
   const searchParams = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')

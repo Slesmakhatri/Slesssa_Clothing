@@ -13,6 +13,7 @@ const adminNavItems = [
   { label: 'Payouts', to: '/dashboard/admin/payouts', icon: 'bi-cash-stack' },
   { label: 'Reviews & Questions', to: '/dashboard/admin/reviews-questions', icon: 'bi-chat-left-text' },
   { label: 'Contact Messages', to: '/dashboard/admin/contact-messages', icon: 'bi-envelope' },
+  { label: 'Vendor Support', to: '/dashboard/admin/vendor-support', icon: 'bi-headset' },
   { label: 'Analytics', to: '/dashboard/admin/analytics', icon: 'bi-bar-chart' },
   { label: 'Settings', to: '/dashboard/admin/settings', icon: 'bi-gear' }
 ];

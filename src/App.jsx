@@ -107,13 +107,9 @@ function App() {
 
       <Route element={<TailorLayout />}>
         <Route path="/dashboard/tailor" element={<RoleRoute allowedRoles={['tailor']}><TailorDashboardPage /></RoleRoute>} />
-        <Route path="/dashboard/tailor/assigned-requests" element={<RoleRoute allowedRoles={['tailor']}><TailorDashboardPage /></RoleRoute>} />
-        <Route path="/dashboard/tailor/measurements" element={<RoleRoute allowedRoles={['tailor']}><TailorDashboardPage /></RoleRoute>} />
-        <Route path="/dashboard/tailor/messages" element={<RoleRoute allowedRoles={['tailor']}><TailorDashboardPage /></RoleRoute>} />
-        <Route path="/dashboard/tailor/progress-updates" element={<RoleRoute allowedRoles={['tailor']}><RolePanelPage role="tailor" title="Progress Updates" description="Tailor-only workspace for tracking production updates on assigned customization requests." cards={tailorModuleCards.progress} /></RoleRoute>} />
-        <Route path="/dashboard/tailor/completed-work" element={<RoleRoute allowedRoles={['tailor']}><RolePanelPage role="tailor" title="Completed Work" description="Tailor-only completed assignment area with no storefront shopping controls." cards={tailorModuleCards.completed} /></RoleRoute>} />
         <Route path="/dashboard/tailor/earnings" element={<RoleRoute allowedRoles={['tailor']}><RolePanelPage role="tailor" title="Earnings" description="Tailor earnings and payout visibility stays separate from vendor payout operations." cards={tailorModuleCards.earnings} /></RoleRoute>} />
         <Route path="/dashboard/tailor/settings" element={<RoleRoute allowedRoles={['tailor']}><RolePanelPage role="tailor" title="Settings" description="Tailor account and workspace settings are isolated from customer and vendor experiences." cards={tailorModuleCards.settings} /></RoleRoute>} />
+        <Route path="/dashboard/tailor/:section" element={<RoleRoute allowedRoles={['tailor']}><TailorDashboardPage /></RoleRoute>} />
       </Route>
 
       <Route element={<AdminLayout />}>
@@ -127,6 +123,7 @@ function App() {
         <Route path="/dashboard/admin/payouts" element={<RoleRoute allowedRoles={['admin']}><AdminDashboardPage /></RoleRoute>} />
         <Route path="/dashboard/admin/reviews-questions" element={<RoleRoute allowedRoles={['admin']}><AdminDashboardPage /></RoleRoute>} />
         <Route path="/dashboard/admin/contact-messages" element={<RoleRoute allowedRoles={['admin']}><AdminDashboardPage /></RoleRoute>} />
+        <Route path="/dashboard/admin/vendor-support" element={<RoleRoute allowedRoles={['admin']}><AdminDashboardPage /></RoleRoute>} />
         <Route path="/dashboard/admin/analytics" element={<RoleRoute allowedRoles={['admin']}><AdminDashboardPage /></RoleRoute>} />
         <Route path="/dashboard/admin/tailor-applications" element={<RoleRoute allowedRoles={['admin']}><RolePanelPage role="admin" title="Tailor Applications" description="Dedicated admin route for tailor onboarding review, separated from vendor applications." cards={adminModuleCards.tailorApplications} /></RoleRoute>} />
         <Route path="/dashboard/admin/tailors" element={<RoleRoute allowedRoles={['admin']}><RolePanelPage role="admin" title="Tailors" description="Admin-only tailor management route with no customer UI or vendor workspace controls." cards={adminModuleCards.tailors} /></RoleRoute>} />
