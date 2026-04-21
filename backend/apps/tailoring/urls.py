@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     MeasurementSuggestionAPIView,
     MeasurementViewSet,
+    TailorMeasurementsAPIView,
     TailorProfileViewSet,
     TailorRecommendationViewSet,
     TailoringMessageViewSet,
@@ -19,4 +20,5 @@ router.register("tailoring-messages", TailoringMessageViewSet, basename="tailori
 
 urlpatterns = [
     path("measurement-suggestions/", MeasurementSuggestionAPIView.as_view(), name="measurement-suggestions"),
+    path("tailor/measurements/", TailorMeasurementsAPIView.as_view(), name="tailor-measurements"),
 ] + router.urls

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   getDashboardSummary,
   listChatConversations,
+  listTailorMeasurements,
   listTailorProfiles,
   listTailoringRequests,
   updateMeasurement,
@@ -48,6 +49,7 @@ function TailorDashboardPage() {
   const activeSection = SECTION_BY_ROUTE[section] || 'overview';
   const [summary, setSummary] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [measurementSets, setMeasurementSets] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
@@ -70,10 +72,26 @@ function TailorDashboardPage() {
   function loadRequests() {
     return listTailoringRequests()
       .then((items) => {
+        if (import.meta.env.DEV) {
+          console.log('Tailor assigned requests payload', items);
+          console.log('Tailor assigned requests count', items.length);
+        }
         setRequests(items);
         setActiveRequestId((current) => current || items[0]?.id || null);
       })
       .catch((error) => setStatusMessage(error?.message || 'Could not load assigned tailoring requests.'));
+  }
+
+  function loadMeasurementSets() {
+    return listTailorMeasurements()
+      .then((items) => {
+        if (import.meta.env.DEV) {
+          console.log('Tailor measurements payload', items);
+          console.log('Tailor measurement set count', items.length);
+        }
+        setMeasurementSets(items);
+      })
+      .catch((error) => setStatusMessage(error?.message || 'Could not load tailor measurements.'));
   }
 
   function loadWorkspace() {
@@ -82,6 +100,7 @@ function TailorDashboardPage() {
       getDashboardSummary('tailor').then(setSummary),
       listChatConversations({ kind: 'customer_tailor' }).then(setConversations),
       loadRequests(),
+      loadMeasurementSets(),
       listTailorProfiles().then((profiles) => {
         const profile = profiles[0] || null;
         setTailorProfile(profile);
@@ -109,7 +128,7 @@ function TailorDashboardPage() {
   const activeRequest = requests.find((item) => item.id === activeRequestId) || requests[0] || null;
   const completedRequests = requests.filter((item) => item.status === 'completed');
   const activeRequests = requests.filter((item) => ACTIVE_STATUSES.has(String(item.status || '').toLowerCase()));
-  const requestsWithMeasurements = requests.filter((item) => item.measurement_detail);
+  const requestsWithMeasurements = measurementSets;
   const conversationCount = summary?.conversation_count ?? conversations.length;
   const completionRate = Number(summary?.completion_rate ?? 0);
   const earningsRows = useMemo(
@@ -295,21 +314,21 @@ function TailorDashboardPage() {
           initialPageSize={4}
           className="tailor-measurement-grid"
           emptyState={<div className="filter-empty-state compact">No measurement details are linked to assigned requests yet.</div>}
-          renderItem={(request) => (
-            <article key={request.id} className="table-card tailor-measurement-card">
+          renderItem={(entry) => (
+            <article key={entry.request_id} className="table-card tailor-measurement-card">
               <div>
-                <span className="section-eyebrow">{requestCustomerName(request)}</span>
-                <h4>{requestTitle(request)}</h4>
-                <p>{request.standard_size ? `Standard size ${request.standard_size}` : 'Custom measurement set'}</p>
+                <span className="section-eyebrow">{entry.customer_detail?.full_name || entry.customer_detail?.email || 'Customer'}</span>
+                <h4>{entry.reference_product_name || entry.clothing_type || 'Custom tailoring request'}</h4>
+                <p>{entry.request_detail?.standard_size ? `Standard size ${entry.request_detail.standard_size}` : 'Custom measurement set'}</p>
               </div>
               <div className="tailor-measurement-values">
                 {MEASUREMENT_FIELDS.map((field) => (
-                  request.measurement_detail?.[field] ? (
-                    <span key={field}>{field.replaceAll('_', ' ')}: <strong>{request.measurement_detail[field]}</strong></span>
+                  entry.measurement_detail?.[field] ? (
+                    <span key={field}>{field.replaceAll('_', ' ')}: <strong>{entry.measurement_detail[field]}</strong></span>
                   ) : null
                 ))}
               </div>
-              <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setActiveRequestId(request.id)}>
+              <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setActiveRequestId(entry.request_id)}>
                 Open Related Request
               </button>
             </article>

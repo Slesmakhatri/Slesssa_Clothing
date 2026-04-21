@@ -313,8 +313,64 @@ def suggest_measurements_for_profile(user, data):
 
 
 def list_measurements(user):
-    query = {} if user.role in {"admin", "super_admin"} else {"user": user.id}
-    return [clean_document(document) for document in measurements_collection().find(query, sort=[("created_at", -1), ("id", -1)])]
+    if user.role in {"admin", "super_admin"}:
+        measurements = [clean_document(document) for document in measurements_collection().find({}, sort=[("created_at", -1), ("id", -1)])]
+    elif user.role == "tailor":
+        assigned_requests = list_tailoring_requests(user)
+        measurement_ids = {
+            _safe_int_or_none(item.get("measurement"))
+            for item in assigned_requests
+            if _safe_int_or_none(item.get("measurement")) is not None
+        }
+        measurements = [
+            clean_document(document)
+            for document in measurements_collection().find({"id": {"$in": sorted(measurement_ids)}}, sort=[("created_at", -1), ("id", -1)])
+        ] if measurement_ids else []
+    else:
+        measurements = [clean_document(document) for document in measurements_collection().find({"user": user.id}, sort=[("created_at", -1), ("id", -1)])]
+    logger.debug(
+        "Measurements for user %s role %s -> %s records",
+        getattr(user, "id", None),
+        getattr(user, "role", None),
+        len(measurements),
+    )
+    return measurements
+
+
+def list_tailor_measurements(user):
+    assigned_requests = list_tailoring_requests(user)
+    rows = []
+    for request_document in assigned_requests:
+        measurement_detail = request_document.get("measurement_detail")
+        measurement_id = _safe_int_or_none(request_document.get("measurement"))
+        if not measurement_detail and measurement_id is not None:
+            measurement_detail = clean_document(measurements_collection().find_one({"id": measurement_id}))
+        if not measurement_detail:
+            continue
+        rows.append(
+            {
+                "request_id": request_document.get("id"),
+                "request_status": request_document.get("status"),
+                "clothing_type": request_document.get("clothing_type"),
+                "reference_product_name": request_document.get("reference_product_name", ""),
+                "customer_id": request_document.get("customer_id") or request_document.get("user"),
+                "customer_detail": request_document.get("user_detail"),
+                "measurement_id": measurement_detail.get("id"),
+                "measurement_detail": measurement_detail,
+                "assigned_tailor": request_document.get("assigned_tailor"),
+                "assigned_tailor_detail": request_document.get("assigned_tailor_detail"),
+                "tailor_profile_detail": request_document.get("tailor_profile_detail"),
+                "request_detail": request_document,
+                "created_at": request_document.get("created_at"),
+            }
+        )
+    logger.debug(
+        "Tailor measurements for user %s role %s -> %s rows",
+        getattr(user, "id", None),
+        getattr(user, "role", None),
+        len(rows),
+    )
+    return rows
 
 
 def get_measurement_for_user(user, measurement_id):

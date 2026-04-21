@@ -31,6 +31,22 @@ class MeasurementSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
 
 
+class TailorMeasurementSerializer(serializers.Serializer):
+    request_id = serializers.IntegerField(read_only=True)
+    request_status = serializers.CharField(read_only=True, allow_blank=True)
+    clothing_type = serializers.CharField(read_only=True, allow_blank=True)
+    reference_product_name = serializers.CharField(read_only=True, allow_blank=True)
+    customer_id = serializers.IntegerField(read_only=True, allow_null=True)
+    customer_detail = UserSummarySerializer(read_only=True, allow_null=True)
+    measurement_id = serializers.IntegerField(read_only=True)
+    measurement_detail = MeasurementSerializer(read_only=True)
+    assigned_tailor = serializers.IntegerField(read_only=True, allow_null=True)
+    assigned_tailor_detail = UserSummarySerializer(read_only=True, allow_null=True)
+    tailor_profile_detail = serializers.JSONField(read_only=True, allow_null=True)
+    request_detail = serializers.JSONField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
 class MeasurementSuggestionRequestSerializer(serializers.Serializer):
     gender = serializers.ChoiceField(choices=["female", "male", "other"])
     height = serializers.DecimalField(max_digits=6, decimal_places=2, required=False, allow_null=True)

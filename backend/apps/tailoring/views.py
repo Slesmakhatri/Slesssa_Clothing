@@ -13,6 +13,7 @@ from .repository import (
     get_tailor_profile_for_user,
     get_tailoring_request_for_user,
     list_measurements,
+    list_tailor_measurements,
     list_tailor_profiles,
     list_tailoring_messages,
     list_tailoring_requests,
@@ -25,6 +26,7 @@ from .serializers import (
     MeasurementSerializer,
     MeasurementSuggestionRequestSerializer,
     MeasurementSuggestionResponseSerializer,
+    TailorMeasurementSerializer,
     TailorProfileSerializer,
     TailorRecommendationRequestSerializer,
     TailorRecommendationResponseSerializer,
@@ -78,6 +80,14 @@ class MeasurementSuggestionAPIView(views.APIView):
         serializer.is_valid(raise_exception=True)
         suggestion = suggest_measurements_for_profile(request.user, serializer.validated_data)
         return Response(MeasurementSuggestionResponseSerializer(suggestion).data)
+
+
+class TailorMeasurementsAPIView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsTailorVendorOrAdmin]
+
+    def get(self, request):
+        rows = list_tailor_measurements(request.user)
+        return Response(TailorMeasurementSerializer(rows, many=True).data)
 
 
 class TailorProfileViewSet(viewsets.ViewSet):

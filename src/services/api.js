@@ -797,6 +797,11 @@ export async function listTailoringMessages(params = {}) {
   return unwrapListResponse(payload);
 }
 
+export async function listTailorMeasurements() {
+  const payload = await apiRequest('/tailor/measurements/', { requiresAuth: true });
+  return unwrapListResponse(payload);
+}
+
 export async function createTailoringMessage(formData) {
   return apiRequest('/tailoring-messages/', {
     method: 'POST',
