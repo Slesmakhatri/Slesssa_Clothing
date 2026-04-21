@@ -423,33 +423,39 @@ function SuperAdminDashboardPage() {
         <div className="row g-4">
           <div className="col-xl-8">
             <div className="table-card">
-              <div className="table-responsive">
-                <table className="table align-middle mb-0 super-admin-users-table">
-                  <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-                  <tbody>
-                    {filteredUsers.length ? filteredUsers.map((user) => (
-                      <tr key={user.id} className={selectedUser?.id === user.id ? 'active' : ''} onClick={() => setSelectedUserId(user.id)}>
-                        <td>{user.full_name || user.username || 'Unnamed user'}</td>
-                        <td>{user.email}</td>
-                        <td><span className="request-status-pill">{formatRole(user.role)}</span></td>
-                        <td>{user.is_active === false ? 'Suspended' : 'Active'}</td>
-                        <td>{formatDate(user.date_joined)}</td>
-                        <td>
-                          <div className="vendor-table-actions" onClick={(event) => event.stopPropagation()}>
-                            {['admin', 'super_admin'].includes(user.role) ? (
-                              <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEdit(user)}>Edit</button>
-                            ) : (
-                              <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setSelectedUserId(user.id)}>Details</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="6">No users found for this filter.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PaginatedTable
+                items={filteredUsers}
+                columns={[
+                  { key: 'name', label: 'Name' },
+                  { key: 'email', label: 'Email' },
+                  { key: 'role', label: 'Role' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'joined', label: 'Joined' },
+                  { key: 'actions', label: 'Actions' }
+                ]}
+                tableClassName="super-admin-users-table"
+                itemLabel="users"
+                initialPageSize={10}
+                emptyText="No users found for this filter."
+                renderRow={(user, _index, key) => (
+                  <tr key={key} className={selectedUser?.id === user.id ? 'active' : ''} onClick={() => setSelectedUserId(user.id)}>
+                    <td>{user.full_name || user.username || 'Unnamed user'}</td>
+                    <td>{user.email}</td>
+                    <td><span className="request-status-pill">{formatRole(user.role)}</span></td>
+                    <td>{user.is_active === false ? 'Suspended' : 'Active'}</td>
+                    <td>{formatDate(user.date_joined)}</td>
+                    <td>
+                      <div className="vendor-table-actions" onClick={(event) => event.stopPropagation()}>
+                        {['admin', 'super_admin'].includes(user.role) ? (
+                          <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEdit(user)}>Edit</button>
+                        ) : (
+                          <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setSelectedUserId(user.id)}>Details</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              />
             </div>
           </div>
 
@@ -498,27 +504,32 @@ function SuperAdminDashboardPage() {
         <div className="col-xl-7">
           <div className="table-card">
             <SectionTitle eyebrow="Admin Management" title="Admin and super admin accounts" align="start" />
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  {adminUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td>{user.full_name || user.username}</td>
-                      <td>{user.email}</td>
-                      <td>{formatRole(user.role)}</td>
-                      <td>{user.is_active === false ? 'Suspended' : 'Active'}</td>
-                      <td>
-                        <div className="vendor-table-actions">
-                          <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEdit(user)}>Edit</button>
-                          {user.role !== 'super_admin' ? <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(user)}>Delete</button> : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PaginatedTable
+              items={adminUsers}
+              columns={[
+                { key: 'name', label: 'Name' },
+                { key: 'email', label: 'Email' },
+                { key: 'role', label: 'Role' },
+                { key: 'status', label: 'Status' },
+                { key: 'actions', label: '' }
+              ]}
+              itemLabel="admin accounts"
+              initialPageSize={5}
+              renderRow={(user, _index, key) => (
+                <tr key={key}>
+                  <td>{user.full_name || user.username}</td>
+                  <td>{user.email}</td>
+                  <td>{formatRole(user.role)}</td>
+                  <td>{user.is_active === false ? 'Suspended' : 'Active'}</td>
+                  <td>
+                    <div className="vendor-table-actions">
+                      <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEdit(user)}>Edit</button>
+                      {user.role !== 'super_admin' ? <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(user)}>Delete</button> : null}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            />
           </div>
         </div>
       </div>
