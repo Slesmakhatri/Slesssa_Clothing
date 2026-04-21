@@ -1085,8 +1085,12 @@ function VendorDashboardWorkspace({
               <div className="table-card">
                 <VendorSectionHeader title="Reviews" description="Monitor product feedback and moderate visibility when required." />
                 {reviews.length ? (
-                  <div className="vendor-list-stack">
-                    {reviews.map((review) => (
+                  <PaginatedCardList
+                    items={reviews}
+                    itemLabel="reviews"
+                    initialPageSize={4}
+                    className="vendor-list-stack"
+                    renderItem={(review) => (
                       <article key={review.id} className="vendor-compact-card vendor-compact-card-column">
                         <div className="vendor-compact-card__row">
                           <strong>{review.product_name}</strong>
@@ -1098,8 +1102,8 @@ function VendorDashboardWorkspace({
                           {review.status === 'hidden' ? 'Show Review' : 'Hide Review'}
                         </button>
                       </article>
-                    ))}
-                  </div>
+                    )}
+                  />
                 ) : (
                   <div className="empty-state-sm">No reviews yet.</div>
                 )}
@@ -1108,8 +1112,12 @@ function VendorDashboardWorkspace({
               <div className="table-card">
                 <VendorSectionHeader title="Product Questions" description="Respond to buyer questions before they drop off." />
                 {questions.length ? (
-                  <div className="vendor-list-stack">
-                    {questions.map((question) => (
+                  <PaginatedCardList
+                    items={questions}
+                    itemLabel="questions"
+                    initialPageSize={4}
+                    className="vendor-list-stack"
+                    renderItem={(question) => (
                       <article key={question.id} className="vendor-compact-card vendor-compact-card-column">
                         <div className="vendor-compact-card__row">
                           <strong>{question.product_name}</strong>
@@ -1121,8 +1129,8 @@ function VendorDashboardWorkspace({
                           Save Response
                         </button>
                       </article>
-                    ))}
-                  </div>
+                    )}
+                  />
                 ) : (
                   <div className="empty-state-sm">No questions yet.</div>
                 )}
@@ -1142,32 +1150,30 @@ function VendorDashboardWorkspace({
               <div className="table-card">
                 <VendorSectionHeader title="Payout Breakdown" description="Payout becomes eligible only after delivery or completion." />
                 {vendorScopedItems.length ? (
-                  <div className="table-responsive">
-                    <table className="table align-middle vendor-data-table">
-                      <thead>
-                        <tr>
-                          <th>Order</th>
-                          <th>Product</th>
-                          <th>Type</th>
-                          <th>Commission</th>
-                          <th>Payout</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {vendorScopedItems.map((item) => (
-                          <tr key={`${item.order_number}-${item.id}`}>
-                            <td>{item.order_number}</td>
-                            <td>{item.product_name}</td>
-                            <td>{item.is_customized ? 'Customized' : item.product_type || 'Ready-made'}</td>
-                            <td>{formatCurrency(item.platform_commission)}</td>
-                            <td>{formatCurrency(item.vendor_payout_amount)}</td>
-                            <td><span className={`status-pill status-${String(item.payout_status || '').toLowerCase()}`}>{item.payout_status || 'pending'}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PaginatedTable
+                    items={vendorScopedItems}
+                    columns={[
+                      { key: 'order', label: 'Order' },
+                      { key: 'product', label: 'Product' },
+                      { key: 'type', label: 'Type' },
+                      { key: 'commission', label: 'Commission' },
+                      { key: 'payout', label: 'Payout' },
+                      { key: 'status', label: 'Status' }
+                    ]}
+                    tableClassName="vendor-data-table"
+                    itemLabel="payout records"
+                    initialPageSize={5}
+                    renderRow={(item, _index, key) => (
+                      <tr key={key}>
+                        <td>{item.order_number}</td>
+                        <td>{item.product_name}</td>
+                        <td>{item.is_customized ? 'Customized' : item.product_type || 'Ready-made'}</td>
+                        <td>{formatCurrency(item.platform_commission)}</td>
+                        <td>{formatCurrency(item.vendor_payout_amount)}</td>
+                        <td><span className={`status-pill status-${String(item.payout_status || '').toLowerCase()}`}>{item.payout_status || 'pending'}</span></td>
+                      </tr>
+                    )}
+                  />
                 ) : (
                   <div className="empty-state-sm">No payout data yet.</div>
                 )}
