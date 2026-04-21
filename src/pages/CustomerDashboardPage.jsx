@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import TailoringRequestThread from '../components/tailoring/TailoringRequestThread';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
+import PaginatedCardList from '../components/common/PaginatedCardList';
+import PaginatedTable from '../components/common/PaginatedTable';
 import ProductCard from '../components/shop/ProductCard';
 import SectionTitle from '../components/common/SectionTitle';
 import { useAuth } from '../context/AuthContext';
@@ -242,32 +244,37 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
           <div className="dashboard-thread-layout">
             <div className="table-card">
               <SectionTitle eyebrow="Tailoring Threads" title="Your active custom orders" align="start" />
-              <table className="table align-middle mb-0">
-                <thead>
-                  <tr><th>Garment</th><th>Status</th><th>Tailor</th><th>Thread</th></tr>
-                </thead>
-                <tbody>
-                  {requests.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.clothing_type}</td>
-                      <td>{item.status}</td>
-                      <td>{item.assigned_tailor_detail?.full_name || item.assigned_tailor_detail?.email || 'Unassigned'}</td>
-                      <td>
-                        <div className="d-flex flex-column align-items-start gap-1">
-                          <button type="button" className="btn btn-link p-0" onClick={() => setActiveRequestId(item.id)}>
-                            Open
-                          </button>
-                          {item.assigned_tailor ? (
-                            <Link to={`/messages?kind=customer_tailor&tailoring_request_id=${item.id}`} className="btn btn-link p-0">
-                              Chat with Tailor
-                            </Link>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <PaginatedTable
+                items={requests}
+                columns={[
+                  { key: 'garment', label: 'Garment' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'tailor', label: 'Tailor' },
+                  { key: 'thread', label: 'Thread' }
+                ]}
+                itemLabel="requests"
+                initialPageSize={5}
+                emptyText="No tailoring requests yet."
+                renderRow={(item, _index, key) => (
+                  <tr key={key}>
+                    <td>{item.clothing_type}</td>
+                    <td>{item.status}</td>
+                    <td>{item.assigned_tailor_detail?.full_name || item.assigned_tailor_detail?.email || 'Unassigned'}</td>
+                    <td>
+                      <div className="d-flex flex-column align-items-start gap-1">
+                        <button type="button" className="btn btn-link p-0" onClick={() => setActiveRequestId(item.id)}>
+                          Open
+                        </button>
+                        {item.assigned_tailor ? (
+                          <Link to={`/messages?kind=customer_tailor&tailoring_request_id=${item.id}`} className="btn btn-link p-0">
+                            Chat with Tailor
+                          </Link>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              />
             </div>
 
             <TailoringRequestThread request={activeRequest} onMessageCreated={loadRequests} />
@@ -277,72 +284,79 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
             <div className="col-lg-8">
               <div className="table-card">
                 <SectionTitle eyebrow="Order History" title="Your latest orders" align="start" />
-                <table className="table align-middle mb-0">
-                  <thead>
-                    <tr><th>Order</th><th>Status</th><th>Payment</th><th>Amount</th><th>Vendor Chat</th><th>Returns</th></tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((item) => {
-                      const vendorUserIds = getOrderVendorUserIds(item);
-                      const orderReturnItems = deliveredOrderItems.filter((entry) => String(entry.orderId) === String(item.id));
-                      return (
-                        <tr key={item.id}>
-                          <td><Link to={buildOrderDetailsPath(item.id)}>{item.order_number}</Link></td>
-                          <td>{item.status}</td>
-                          <td>{item.payment_status || item.payment_method}</td>
-                          <td>NPR {Number(item.total).toLocaleString()}</td>
-                          <td>
-                            <div className="d-flex flex-column align-items-start gap-1">
-                              {vendorUserIds.length ? vendorUserIds.map((vendorUserId, index) => (
-                                <Link
-                                  key={`${item.id}-${vendorUserId}`}
-                                  to={`/messages?kind=customer_vendor&vendor_user_id=${vendorUserId}&order_id=${item.id}`}
-                                  className="btn btn-link p-0"
-                                >
-                                  Chat with Vendor{vendorUserIds.length > 1 ? ` ${index + 1}` : ''}
-                                </Link>
-                              )) : (
-                                <span className="text-muted small">No vendor linked</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex flex-column align-items-start gap-1">
-                              {orderReturnItems.length ? orderReturnItems.map((entry) => {
-                                if (entry.existingReturn) {
-                                  return (
-                                    <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
-                                      {entry.productName}: {String(entry.existingReturn.status || '').replaceAll('_', ' ')}
-                                    </span>
-                                  );
-                                }
-                                if (!entry.eligibility.eligible) {
-                                  return (
-                                    <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
-                                      {entry.productName}: {entry.eligibility.reason}
-                                    </span>
-                                  );
-                                }
+                <PaginatedTable
+                  items={orders}
+                  columns={[
+                    { key: 'order', label: 'Order' },
+                    { key: 'status', label: 'Status' },
+                    { key: 'payment', label: 'Payment' },
+                    { key: 'amount', label: 'Amount' },
+                    { key: 'vendorChat', label: 'Vendor Chat' },
+                    { key: 'returns', label: 'Returns' }
+                  ]}
+                  itemLabel="orders"
+                  initialPageSize={5}
+                  emptyText="No orders found."
+                  renderRow={(item, _index, key) => {
+                    const vendorUserIds = getOrderVendorUserIds(item);
+                    const orderReturnItems = deliveredOrderItems.filter((entry) => String(entry.orderId) === String(item.id));
+                    return (
+                      <tr key={key}>
+                        <td><Link to={buildOrderDetailsPath(item.id)}>{item.order_number}</Link></td>
+                        <td>{item.status}</td>
+                        <td>{item.payment_status || item.payment_method}</td>
+                        <td>NPR {Number(item.total).toLocaleString()}</td>
+                        <td>
+                          <div className="d-flex flex-column align-items-start gap-1">
+                            {vendorUserIds.length ? vendorUserIds.map((vendorUserId, index) => (
+                              <Link
+                                key={`${item.id}-${vendorUserId}`}
+                                to={`/messages?kind=customer_vendor&vendor_user_id=${vendorUserId}&order_id=${item.id}`}
+                                className="btn btn-link p-0"
+                              >
+                                Chat with Vendor{vendorUserIds.length > 1 ? ` ${index + 1}` : ''}
+                              </Link>
+                            )) : (
+                              <span className="text-muted small">No vendor linked</span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="d-flex flex-column align-items-start gap-1">
+                            {orderReturnItems.length ? orderReturnItems.map((entry) => {
+                              if (entry.existingReturn) {
                                 return (
-                                  <button
-                                    key={`${entry.orderId}-${entry.orderItemId}`}
-                                    type="button"
-                                    className="btn btn-link p-0"
-                                    onClick={() => startReturnRequest(entry)}
-                                  >
-                                    Request Return: {entry.productName}
-                                  </button>
+                                  <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
+                                    {entry.productName}: {String(entry.existingReturn.status || '').replaceAll('_', ' ')}
+                                  </span>
                                 );
-                              }) : (
-                                <span className="text-muted small">No returnable items</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              }
+                              if (!entry.eligibility.eligible) {
+                                return (
+                                  <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
+                                    {entry.productName}: {entry.eligibility.reason}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <button
+                                  key={`${entry.orderId}-${entry.orderItemId}`}
+                                  type="button"
+                                  className="btn btn-link p-0"
+                                  onClick={() => startReturnRequest(entry)}
+                                >
+                                  Request Return: {entry.productName}
+                                </button>
+                              );
+                            }) : (
+                              <span className="text-muted small">No returnable items</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                />
               </div>
             </div>
             <div className="col-lg-4">
@@ -360,13 +374,18 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
               <div className="table-card">
                 <SectionTitle eyebrow="Wishlist" title="Saved products you may want to revisit" align="start" />
                 {wishlistCatalog.length ? (
-                  <div className="shop-product-grid">
-                    {wishlistCatalog.slice(0, 4).map((product) => (
+                  <PaginatedCardList
+                    items={wishlistCatalog}
+                    itemLabel="wishlist items"
+                    initialPageSize={4}
+                    pageSizeOptions={[4, 8, 12]}
+                    className="shop-product-grid"
+                    renderItem={(product) => (
                       <div key={product.slug || product.id}>
                         <ProductCard product={product} />
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  />
                 ) : (
                   <div className="filter-empty-state">
                     <h4>No wishlist items yet</h4>
@@ -382,32 +401,40 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
               <div className="table-card">
                 <SectionTitle eyebrow="My Reviews" title="Delivered-order feedback" align="start" />
                 {reviewStatus ? <div className="alert alert-info">{reviewStatus}</div> : null}
-                <div className="dashboard-list-stack">
-                  {reviews.length ? reviews.map((item) => (
-                    <CustomerReviewCard key={item.id} review={item} onSave={saveReview} onDelete={removeReview} />
-                  )) : (
+                <PaginatedCardList
+                  items={reviews}
+                  itemLabel="reviews"
+                  initialPageSize={3}
+                  emptyState={(
                     <div className="filter-empty-state">
                       <h4>No reviews submitted yet</h4>
                       <p>Your delivered-order feedback will appear here after you review products.</p>
                     </div>
                   )}
-                </div>
+                  renderItem={(item) => (
+                    <CustomerReviewCard key={item.id} review={item} onSave={saveReview} onDelete={removeReview} />
+                  )}
+                />
               </div>
             </div>
             <div className="col-lg-6">
               <div className="table-card">
                 <SectionTitle eyebrow="My Questions" title="Product Q&A activity" align="start" />
                 {questionStatus ? <div className="alert alert-info">{questionStatus}</div> : null}
-                <div className="dashboard-list-stack">
-                  {questions.length ? questions.map((item) => (
-                    <CustomerQuestionCard key={item.id} question={item} onSave={saveQuestion} onDelete={removeQuestion} />
-                  )) : (
+                <PaginatedCardList
+                  items={questions}
+                  itemLabel="questions"
+                  initialPageSize={3}
+                  emptyState={(
                     <div className="filter-empty-state">
                       <h4>No product questions yet</h4>
                       <p>Your product questions and vendor answers will appear here.</p>
                     </div>
                   )}
-                </div>
+                  renderItem={(item) => (
+                    <CustomerQuestionCard key={item.id} question={item} onSave={saveQuestion} onDelete={removeQuestion} />
+                  )}
+                />
               </div>
             </div>
             <div className="col-lg-7" id="returns">
@@ -502,40 +529,54 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
                     </button>
                   </div>
                 </form>
-                <table className="table align-middle mb-0">
-                  <thead>
-                    <tr><th>Order</th><th>Product</th><th>Status</th><th>Resolution</th><th>Updated</th><th>Action</th></tr>
-                  </thead>
-                  <tbody>
-                    {returns.length ? returns.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.order_number}</td>
-                        <td>{item.product_name}</td>
-                        <td>{item.status.replaceAll('_', ' ')}</td>
-                        <td>{(item.decision_resolution || item.requested_resolution).replaceAll('_', ' ')}</td>
-                        <td>{formatDateTime(item.updated_at || item.created_at)}</td>
-                        <td>
-                          {String(item.status || '').toLowerCase() === 'pending' ? (
-                            <button type="button" className="btn btn-link p-0" onClick={() => cancelPendingReturn(item.id)}>
-                              Cancel
-                            </button>
-                          ) : (
-                            <span className="text-muted small">Tracked</span>
-                          )}
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="6">No return requests yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
+                <PaginatedTable
+                  items={returns}
+                  columns={[
+                    { key: 'order', label: 'Order' },
+                    { key: 'product', label: 'Product' },
+                    { key: 'status', label: 'Status' },
+                    { key: 'resolution', label: 'Resolution' },
+                    { key: 'updated', label: 'Updated' },
+                    { key: 'action', label: 'Action' }
+                  ]}
+                  itemLabel="return requests"
+                  initialPageSize={5}
+                  emptyText="No return requests yet."
+                  renderRow={(item, _index, key) => (
+                    <tr key={key}>
+                      <td>{item.order_number}</td>
+                      <td>{item.product_name}</td>
+                      <td>{item.status.replaceAll('_', ' ')}</td>
+                      <td>{(item.decision_resolution || item.requested_resolution).replaceAll('_', ' ')}</td>
+                      <td>{formatDateTime(item.updated_at || item.created_at)}</td>
+                      <td>
+                        {String(item.status || '').toLowerCase() === 'pending' ? (
+                          <button type="button" className="btn btn-link p-0" onClick={() => cancelPendingReturn(item.id)}>
+                            Cancel
+                          </button>
+                        ) : (
+                          <span className="text-muted small">Tracked</span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                />
               </div>
             </div>
             <div className="col-lg-5">
               <div className="table-card">
                 <SectionTitle eyebrow="My Vouchers" title="Store credit balance" align="start" />
-                <div className="dashboard-list-stack">
-                  {vouchers.length ? vouchers.map((voucher) => (
+                <PaginatedCardList
+                  items={vouchers}
+                  itemLabel="vouchers"
+                  initialPageSize={4}
+                  emptyState={(
+                    <div className="filter-empty-state">
+                      <h4>No vouchers yet</h4>
+                      <p>Approved voucher-based returns will appear here as store credit.</p>
+                    </div>
+                  )}
+                  renderItem={(voucher) => (
                     <article key={voucher.id} className="dashboard-list-card">
                       <div className="dashboard-list-head">
                         <strong>Voucher #{voucher.id}</strong>
@@ -544,13 +585,8 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
                       <p className="mb-1">Balance: NPR {Number(voucher.balance).toLocaleString()}</p>
                       <small>{voucher.note} Redemption can be connected into checkout in the next phase.</small>
                     </article>
-                  )) : (
-                    <div className="filter-empty-state">
-                      <h4>No vouchers yet</h4>
-                      <p>Approved voucher-based returns will appear here as store credit.</p>
-                    </div>
                   )}
-                </div>
+                />
               </div>
             </div>
           </div>

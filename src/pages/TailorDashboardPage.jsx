@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AnalyticsBarList from '../components/dashboard/AnalyticsBarList';
 import ChatWorkspace from '../components/chat/ChatWorkspace';
+import PaginatedCardList from '../components/common/PaginatedCardList';
+import PaginatedTable from '../components/common/PaginatedTable';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import SectionTitle from '../components/common/SectionTitle';
 import TailoringRequestThread from '../components/tailoring/TailoringRequestThread';
@@ -124,36 +126,40 @@ function TailorDashboardPage() {
 
   function renderAssignedRequests() {
     return (
-      <div className="table-card tailor-panel">
-        <SectionTitle eyebrow="Assigned Requests" title="Customization orders" text="Only requests assigned to your tailor account are listed here." align="start" />
-        <div className="table-responsive">
-          <table className="table align-middle mb-0 tailor-request-table">
-            <thead>
-              <tr><th>Design</th><th>Customer</th><th>Order Type</th><th>Status</th><th>Measurements</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              {requests.length ? requests.map((request) => (
-                <tr key={request.id}>
-                  <td>
-                    <strong>{requestTitle(request)}</strong>
-                    <div className="vendor-table-meta">{request.fabric} / {request.color}</div>
-                  </td>
-                  <td>{requestCustomerName(request)}</td>
-                  <td>{request.order_type || 'custom'}</td>
-                  <td><span className={`status-pill status-${String(request.status || 'pending').toLowerCase()}`}>{formatStatus(request.status)}</span></td>
-                  <td>{request.measurement_detail ? 'Available' : 'Not added'}</td>
-                  <td>
-                    <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setActiveRequestId(request.id)}>
-                      Open Request
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                <tr><td colSpan="6">No assigned tailoring requests yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <div className="table-card tailor-panel">
+          <SectionTitle eyebrow="Assigned Requests" title="Customization orders" text="Only requests assigned to your tailor account are listed here." align="start" />
+          <PaginatedTable
+            items={requests}
+            columns={[
+              { key: 'design', label: 'Design' },
+              { key: 'customer', label: 'Customer' },
+              { key: 'orderType', label: 'Order Type' },
+              { key: 'status', label: 'Status' },
+              { key: 'measurements', label: 'Measurements' },
+              { key: 'action', label: 'Action' }
+            ]}
+            itemLabel="requests"
+            initialPageSize={5}
+            tableClassName="tailor-request-table"
+            emptyText="No assigned tailoring requests yet."
+            renderRow={(request, _index, key) => (
+              <tr key={key}>
+                <td>
+                  <strong>{requestTitle(request)}</strong>
+                  <div className="vendor-table-meta">{request.fabric} / {request.color}</div>
+                </td>
+                <td>{requestCustomerName(request)}</td>
+                <td>{request.order_type || 'custom'}</td>
+                <td><span className={`status-pill status-${String(request.status || 'pending').toLowerCase()}`}>{formatStatus(request.status)}</span></td>
+                <td>{request.measurement_detail ? 'Available' : 'Not added'}</td>
+                <td>
+                  <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => setActiveRequestId(request.id)}>
+                    Open Request
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
       </div>
     );
   }
@@ -165,8 +171,13 @@ function TailorDashboardPage() {
           <SectionTitle eyebrow="Measurements" title="Customer measurement details" text="Review saved measurements for each assigned customization request." align="start" />
           <span className="status-pill status-info">{requestsWithMeasurements.length} measurement set(s)</span>
         </div>
-        <div className="tailor-measurement-grid">
-          {requestsWithMeasurements.length ? requestsWithMeasurements.map((request) => (
+        <PaginatedCardList
+          items={requestsWithMeasurements}
+          itemLabel="measurement sets"
+          initialPageSize={4}
+          className="tailor-measurement-grid"
+          emptyState={<div className="filter-empty-state compact">No measurement details are linked to assigned requests yet.</div>}
+          renderItem={(request) => (
             <article key={request.id} className="table-card tailor-measurement-card">
               <div>
                 <span className="section-eyebrow">{requestCustomerName(request)}</span>
@@ -184,10 +195,8 @@ function TailorDashboardPage() {
                 Open Related Request
               </button>
             </article>
-          )) : (
-            <div className="filter-empty-state compact">No measurement details are linked to assigned requests yet.</div>
           )}
-        </div>
+        />
       </div>
     );
   }
@@ -201,8 +210,13 @@ function TailorDashboardPage() {
         <div className="tailor-request-workbench">
           <div className="table-card tailor-request-picker">
             <SectionTitle eyebrow="Assigned" title="Select request" align="start" />
-            <div className="dashboard-list-stack">
-              {requests.length ? requests.map((request) => (
+            <PaginatedCardList
+              items={requests}
+              itemLabel="requests"
+              initialPageSize={5}
+              className="dashboard-list-stack"
+              emptyState={<div className="filter-empty-state compact">No assigned requests yet.</div>}
+              renderItem={(request) => (
                 <button
                   key={request.id}
                   type="button"
@@ -213,10 +227,8 @@ function TailorDashboardPage() {
                   <span>{requestCustomerName(request)}</span>
                   <small>{formatStatus(request.status)}</small>
                 </button>
-              )) : (
-                <div className="filter-empty-state compact">No assigned requests yet.</div>
               )}
-            </div>
+            />
           </div>
           <TailoringRequestThread request={activeRequest} onMessageCreated={refreshAfterUpdate} />
         </div>
@@ -240,8 +252,13 @@ function TailorDashboardPage() {
     return (
       <div className="tailor-workspace-stack">
         <SectionTitle eyebrow="Completed Work" title="Finished tailoring requests" text="Review completed assignments and customer context." align="start" />
-        <div className="tailor-measurement-grid">
-          {completedRequests.length ? completedRequests.map((request) => (
+        <PaginatedCardList
+          items={completedRequests}
+          itemLabel="completed requests"
+          initialPageSize={4}
+          className="tailor-measurement-grid"
+          emptyState={<div className="filter-empty-state compact">Completed work will appear after a request is marked completed.</div>}
+          renderItem={(request) => (
             <article key={request.id} className="table-card tailor-measurement-card">
               <span className="section-eyebrow">{requestCustomerName(request)}</span>
               <h4>{requestTitle(request)}</h4>
@@ -250,10 +267,8 @@ function TailorDashboardPage() {
                 Review Details
               </button>
             </article>
-          )) : (
-            <div className="filter-empty-state compact">Completed work will appear after a request is marked completed.</div>
           )}
-        </div>
+        />
       </div>
     );
   }

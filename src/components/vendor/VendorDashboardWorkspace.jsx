@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ChatWorkspace from '../chat/ChatWorkspace';
+import PaginatedCardList from '../common/PaginatedCardList';
+import PaginatedTable from '../common/PaginatedTable';
 import {
   changePassword,
   createProduct,
@@ -755,40 +757,38 @@ function VendorDashboardWorkspace({
                 action={<button type="button" className="btn btn-dark" onClick={() => { resetProductForm(); setActiveSection('add-product'); }}>Add Product</button>}
               />
               {products.length ? (
-                <div className="table-responsive">
-                  <table className="table align-middle vendor-data-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Type</th>
-                        <th>Stock</th>
-                        <th>Price</th>
-                        <th>Sizes</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products.map((product) => (
-                        <tr key={product.id}>
-                          <td>
-                            <strong>{product.name}</strong>
-                            <div className="vendor-table-meta">{product.category_name || product.category_detail?.name || 'Uncategorized'}</div>
-                          </td>
-                          <td>{product.product_type || 'ready_made'}</td>
-                          <td>{product.stock ?? 0}</td>
-                          <td>{formatCurrency(product.price)}</td>
-                          <td>{(product.sizes || []).join(', ') || 'N/A'}</td>
-                          <td className="vendor-table-actions">
-                            <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEditProduct(product)}>Edit</button>
-                            <button type="button" className="btn btn-sm btn-outline-danger" disabled={savingSection === `delete-${product.slug}`} onClick={() => handleDeleteProduct(product.slug)}>
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <PaginatedTable
+                  items={products}
+                  columns={[
+                    { key: 'product', label: 'Product' },
+                    { key: 'type', label: 'Type' },
+                    { key: 'stock', label: 'Stock' },
+                    { key: 'price', label: 'Price' },
+                    { key: 'sizes', label: 'Sizes' },
+                    { key: 'actions', label: '' }
+                  ]}
+                  tableClassName="vendor-data-table"
+                  itemLabel="products"
+                  initialPageSize={5}
+                  renderRow={(product, _index, key) => (
+                    <tr key={key}>
+                      <td>
+                        <strong>{product.name}</strong>
+                        <div className="vendor-table-meta">{product.category_name || product.category_detail?.name || 'Uncategorized'}</div>
+                      </td>
+                      <td>{product.product_type || 'ready_made'}</td>
+                      <td>{product.stock ?? 0}</td>
+                      <td>{formatCurrency(product.price)}</td>
+                      <td>{(product.sizes || []).join(', ') || 'N/A'}</td>
+                      <td className="vendor-table-actions">
+                        <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => startEditProduct(product)}>Edit</button>
+                        <button type="button" className="btn btn-sm btn-outline-danger" disabled={savingSection === `delete-${product.slug}`} onClick={() => handleDeleteProduct(product.slug)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                />
               ) : (
                 <div className="empty-state-sm">No products yet. Add your first product after completing the shop profile.</div>
               )}
