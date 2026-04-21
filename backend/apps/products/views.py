@@ -23,8 +23,97 @@ from .serializers import CategorySerializer, ProductSerializer
 import json
 
 
+LIST_FIELDS = {"sizes", "colors", "fabric_options", "images", "eco_badges"}
+BOOLEAN_FIELDS = {"is_customizable", "is_featured", "is_new_arrival", "is_active"}
+INTEGER_FIELDS = {"vendor", "category", "stock", "popularity"}
+NUMBER_FIELDS = {"price", "discount_price", "rating"}
+TEXT_FIELDS = {
+    "product_type",
+    "name",
+    "description",
+    "sustainability_guidance",
+    "customization_note",
+    "badge",
+    "slug",
+}
+
+
 def _mapping_or_empty(value):
     return value if isinstance(value, dict) else {}
+
+
+def _normalized_request_payload(request):
+    payload = {}
+    if hasattr(request.data, "getlist"):
+        for key in request.data.keys():
+            values = request.data.getlist(key)
+            payload[key] = values if len(values) > 1 else values[0]
+    else:
+        for key, value in request.data.items():
+            if isinstance(value, (list, tuple)):
+                payload[key] = value if len(value) > 1 else value[0]
+            else:
+                payload[key] = value
+    return payload
+
+
+def _try_parse_json(value):
+    if not isinstance(value, str):
+        return value
+    candidate = value.strip()
+    if (candidate.startswith("{") and candidate.endswith("}")) or (candidate.startswith("[") and candidate.endswith("]")):
+        try:
+            return json.loads(candidate)
+        except Exception:
+            return value
+    return value
+
+
+def _coerce_product_payload(payload):
+    normalized = {}
+    for key, value in payload.items():
+        parsed = _try_parse_json(value)
+
+        if key in LIST_FIELDS:
+            if isinstance(parsed, list):
+                normalized[key] = [str(item).strip() for item in parsed if str(item).strip()]
+            elif isinstance(parsed, str):
+                normalized[key] = [item.strip() for item in parsed.split(",") if item.strip()]
+            else:
+                normalized[key] = parsed
+            continue
+
+        if isinstance(parsed, (list, tuple)):
+            parsed = parsed[0] if parsed else None
+
+        if key in BOOLEAN_FIELDS:
+            if isinstance(parsed, str):
+                normalized[key] = parsed.strip().lower() in {"true", "1", "yes", "on"}
+            else:
+                normalized[key] = bool(parsed) if parsed is not None else False
+            continue
+
+        if key in INTEGER_FIELDS:
+            try:
+                normalized[key] = int(parsed)
+            except Exception:
+                normalized[key] = parsed
+            continue
+
+        if key in NUMBER_FIELDS:
+            try:
+                normalized[key] = float(parsed)
+            except Exception:
+                normalized[key] = parsed
+            continue
+
+        if key in TEXT_FIELDS:
+            normalized[key] = "" if parsed is None else str(parsed)
+            continue
+
+        normalized[key] = parsed
+
+    return normalized
 
 
 def _vendor_ready_for_selling(vendor):
@@ -108,92 +197,7 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(ProductSerializer(product, context={"request": request}).data)
 
     def create(self, request):
-        # Debug: log incoming request data to help identify payload shape/type issues
-        try:
-            print('DEBUG: Incoming product create request.data ->', dict(request.data))
-        except Exception:
-            print('DEBUG: Unable to cast request.data to dict for logging')
-        payload = dict(request.data)
-
-        # Normalize payload values: handle lists from multipart, JSON-encoded strings, and string booleans/numbers
-        def _try_parse_json(val):
-            if not isinstance(val, str):
-                return val
-            s = val.strip()
-            if (s.startswith('{') and s.endswith('}')) or (s.startswith('[') and s.endswith(']')):
-                try:
-                    return json.loads(s)
-                except Exception:
-                    return val
-            return val
-
-        def _first_if_list(val):
-            if isinstance(val, (list, tuple)) and val:
-                return val[0]
-            return val
-
-        for key in list(payload.keys()):
-            try:
-                v = payload.get(key)
-                v = _first_if_list(v)
-                v = _try_parse_json(v)
-                # coerce booleans
-                if key in {'is_customizable', 'is_featured', 'is_new_arrival', 'is_active'}:
-                    if isinstance(v, str):
-                        lv = v.strip().lower()
-                        payload[key] = lv in {'true', '1', 'yes', 'on'}
-                    else:
-                        payload[key] = bool(v) if v is not None else False
-                    continue
-                # coerce integers
-                if key in {'vendor', 'category', 'stock', 'popularity'}:
-                    try:
-                        payload[key] = int(v)
-                        continue
-                    except Exception:
-                        # leave as-is; serializer will catch invalid ints
-                        payload[key] = v
-                        continue
-                # coerce numbers
-                if key in {'price', 'discount_price', 'rating'}:
-                    try:
-                        payload[key] = float(v)
-                        continue
-                    except Exception:
-                        payload[key] = v
-                        continue
-                # lists for sizes/colors/fabric_options
-                if key in {'sizes', 'colors', 'fabric_options', 'images', 'eco_badges'}:
-                    if isinstance(v, str):
-                        parsed = _try_parse_json(v)
-                        if isinstance(parsed, list):
-                            payload[key] = parsed
-                        else:
-                            # comma separated fallback
-                            payload[key] = [item.strip() for item in v.split(',') if item.strip()]
-                    else:
-                        payload[key] = v
-                    continue
-                # product_type and text fields: ensure strings
-                if key in {'product_type', 'name', 'description', 'sustainability_guidance', 'customization_note', 'badge', 'slug'}:
-                    if v is None:
-                        payload[key] = ''
-                    else:
-                        payload[key] = str(v)
-                    continue
-                # default assignment
-                payload[key] = v
-            except Exception as exc:
-                print(f'DEBUG: normalization error for {key}: {exc}')
-        # Detailed debug of incoming keys and value types
-        try:
-            for k, v in request.data.items():
-                try:
-                    print(f"DEBUG FIELD: {k} -> type={type(v).__name__} value={v}")
-                except Exception:
-                    print(f"DEBUG FIELD: {k} -> (unprintable value)")
-        except Exception:
-            print('DEBUG: unable to iterate request.data')
+        payload = _coerce_product_payload(_normalized_request_payload(request))
         if "main_image" in request.FILES:
             payload["main_image"] = store_uploaded_file(request.FILES["main_image"], "products/main")
         serializer = ProductSerializer(data=payload)
@@ -219,72 +223,9 @@ class ProductViewSet(viewsets.ViewSet):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         if request.user.role not in {"admin", "super_admin"} and _mapping_or_empty(product.get("vendor_detail")).get("user") != request.user.id:
             return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
-        payload = dict(request.data)
+        payload = _coerce_product_payload(_normalized_request_payload(request))
         if "main_image" in request.FILES:
             payload["main_image"] = store_uploaded_file(request.FILES["main_image"], "products/main")
-
-        # Normalize incoming payload same as create
-        def _try_parse_json(val):
-            if not isinstance(val, str):
-                return val
-            s = val.strip()
-            if (s.startswith('{') and s.endswith('}')) or (s.startswith('[') and s.endswith(']')):
-                try:
-                    return json.loads(s)
-                except Exception:
-                    return val
-            return val
-
-        def _first_if_list(val):
-            if isinstance(val, (list, tuple)) and val:
-                return val[0]
-            return val
-
-        for key in list(payload.keys()):
-            try:
-                v = payload.get(key)
-                v = _first_if_list(v)
-                v = _try_parse_json(v)
-                if key in {'is_customizable', 'is_featured', 'is_new_arrival', 'is_active'}:
-                    if isinstance(v, str):
-                        lv = v.strip().lower()
-                        payload[key] = lv in {'true', '1', 'yes', 'on'}
-                    else:
-                        payload[key] = bool(v) if v is not None else False
-                    continue
-                if key in {'vendor', 'category', 'stock', 'popularity'}:
-                    try:
-                        payload[key] = int(v)
-                        continue
-                    except Exception:
-                        payload[key] = v
-                        continue
-                if key in {'price', 'discount_price', 'rating'}:
-                    try:
-                        payload[key] = float(v)
-                        continue
-                    except Exception:
-                        payload[key] = v
-                        continue
-                if key in {'sizes', 'colors', 'fabric_options', 'images', 'eco_badges'}:
-                    if isinstance(v, str):
-                        parsed = _try_parse_json(v)
-                        if isinstance(parsed, list):
-                            payload[key] = parsed
-                        else:
-                            payload[key] = [item.strip() for item in v.split(',') if item.strip()]
-                    else:
-                        payload[key] = v
-                    continue
-                if key in {'product_type', 'name', 'description', 'sustainability_guidance', 'customization_note', 'badge', 'slug'}:
-                    if v is None:
-                        payload[key] = ''
-                    else:
-                        payload[key] = str(v)
-                    continue
-                payload[key] = v
-            except Exception as exc:
-                print(f'DEBUG: normalization error for {key}: {exc}')
         serializer = ProductSerializer(data={**product, **payload}, partial=True)
         serializer.is_valid(raise_exception=True)
         category = get_category_by_id(serializer.validated_data["category"]) if "category" in serializer.validated_data else None
