@@ -253,7 +253,8 @@ function VendorDashboardWorkspace({
       setReturns(returnList);
       setReviews(reviewList);
       setQuestions(questionList);
-      setCategories(categoryList);
+      console.debug('Categories fetched for vendor workspace:', categoryList);
+      setCategories(categoryList || []);
       setShopForm({
         brand_name: ownVendor?.brand_name || '',
         description: ownVendor?.description || '',
@@ -807,12 +808,21 @@ function VendorDashboardWorkspace({
                   Category
                   <select value={productForm.category} onChange={(event) => setProductForm((current) => ({ ...current, category: event.target.value }))} required>
                     <option value="">Select category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="" disabled>No categories available</option>
+                    ) : (
+                      categories.map((category) => {
+                        const id = category.id || category._id || category._id_str || category.slug || category.name;
+                        const label = category.name || category.label || category.title || category.slug || String(id);
+                        return (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        );
+                      })
+                    )}
                   </select>
+                  {categories.length === 0 ? <div className="vendor-help text-muted">No categories available. Please ask admin to create categories first.</div> : null}
                 </label>
                 <label>
                   Price
