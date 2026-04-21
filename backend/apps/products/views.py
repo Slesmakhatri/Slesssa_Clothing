@@ -92,7 +92,9 @@ class ProductViewSet(viewsets.ViewSet):
 
     def list(self, request):
         vendor_user_id = request.user.id if request.user.is_authenticated and request.user.role == "vendor" and request.query_params.get("mine") else None
-        products = list_products(request.query_params, include_inactive=self.action not in ["list", "retrieve"], vendor_user_id=vendor_user_id)
+        # If vendor is requesting their own products (mine param), include inactive products so vendor can manage them.
+        include_inactive = True if vendor_user_id is not None else (self.action not in ["list", "retrieve"])
+        products = list_products(request.query_params, include_inactive=include_inactive, vendor_user_id=vendor_user_id)
         return Response(ProductSerializer(products, many=True, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
