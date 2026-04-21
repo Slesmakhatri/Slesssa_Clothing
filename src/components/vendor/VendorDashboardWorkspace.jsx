@@ -1033,8 +1033,12 @@ function VendorDashboardWorkspace({
             <div className="table-card">
               <VendorSectionHeader title="Returns" description="Review requests and decide between refund, exchange, voucher, or manual handling." />
               {returns.length ? (
-                <div className="vendor-order-stack">
-                  {returns.map((item) => (
+                <PaginatedCardList
+                  items={returns}
+                  itemLabel="return requests"
+                  initialPageSize={4}
+                  className="vendor-order-stack"
+                  renderItem={(item) => (
                     <article key={item.id} className="vendor-order-card">
                       <div className="vendor-order-card__header">
                         <div>
@@ -1068,8 +1072,8 @@ function VendorDashboardWorkspace({
                         </button>
                       </div>
                     </article>
-                  ))}
-                </div>
+                  )}
+                />
               ) : (
                 <div className="empty-state-sm">No return cases assigned to your shop.</div>
               )}
