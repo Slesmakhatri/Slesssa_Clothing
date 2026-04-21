@@ -51,6 +51,10 @@ def _safe_int_or_none(value):
         return None
 
 
+def _mapping_or_empty(value):
+    return value if isinstance(value, dict) else {}
+
+
 def _coerce_datetime(value):
     if isinstance(value, datetime):
         return value
@@ -737,6 +741,8 @@ def _build_request_doc(user, data, measurement=None, vendor=None, assigned_tailo
 
 
 def _request_accessible(user, document):
+    from apps.vendors.repository import get_vendor_by_user_id
+
     user_role = _user_role(user)
     user_id = _user_id(user)
     if user_role in {"admin", "super_admin"}:
@@ -744,7 +750,14 @@ def _request_accessible(user, document):
     if user_role == "tailor":
         return document.get("assigned_tailor") == user_id or document.get("tailor_id") == user_id
     if user_role == "vendor":
-        return document.get("vendor_detail", {}).get("user") == user_id
+        vendor_detail = _mapping_or_empty(document.get("vendor_detail"))
+        if vendor_detail.get("user") == user_id:
+            return True
+        vendor_id = _safe_int_or_none(document.get("vendor_id") or document.get("vendor"))
+        if vendor_id is None:
+            return False
+        vendor = get_vendor_by_user_id(user_id)
+        return bool(vendor and vendor.get("id") == vendor_id)
     return document.get("user") == user_id
 
 
@@ -1061,6 +1074,35 @@ def list_tailoring_requests(user):
     return visible
 
 
+def list_assigned_tailoring_requests(user):
+    documents = list_tailoring_requests(user)
+    user_role = _user_role(user)
+    user_id = _user_id(user)
+
+    if user_role == "tailor":
+        visible = [
+            document
+            for document in documents
+            if _safe_int_or_none(document.get("assigned_tailor")) == user_id
+            or _safe_int_or_none(document.get("tailor_id")) == user_id
+        ]
+    else:
+        visible = [
+            document
+            for document in documents
+            if _safe_int_or_none(document.get("assigned_tailor")) is not None
+            or _safe_int_or_none(document.get("tailor_id")) is not None
+        ]
+
+    logger.debug(
+        "Assigned tailoring requests for user %s role %s -> %s visible records",
+        getattr(user, "id", None),
+        getattr(user, "role", None),
+        len(visible),
+    )
+    return visible
+
+
 def get_tailoring_request_for_user(user, request_id):
     try:
         request_id = int(request_id)
@@ -1128,6 +1170,37 @@ def update_tailoring_request(user, request_id, updates):
     updated = _hydrate_tailoring_request_relationships(updated_raw, persist=True)
     if not _request_accessible(user, updated):
         return None
+    previous_assigned_tailor = _safe_int_or_none(document.get("assigned_tailor") or document.get("tailor_id"))
+    updated_assigned_tailor = _safe_int_or_none(updated.get("assigned_tailor") or updated.get("tailor_id"))
+    if updated_assigned_tailor and updated_assigned_tailor != previous_assigned_tailor:
+        from apps.notifications.repository import create_notification
+
+        create_notification(
+            user_id=updated_assigned_tailor,
+            title="New Tailoring Assignment",
+            body=f"You have been assigned request #{updated.get('id')} for {updated.get('reference_product_name') or updated.get('clothing_type') or 'a customization order'}.",
+            kind="tailoring",
+            event_key="tailoring_request_assigned",
+            entity_type="tailoring_request",
+            entity_id=updated.get("id"),
+            action_url="/dashboard/tailor/assigned-requests",
+        )
+        if updated.get("user"):
+            tailor_name = (
+                _mapping_or_empty(updated.get("assigned_tailor_detail")).get("full_name")
+                or _mapping_or_empty(updated.get("assigned_tailor_detail")).get("email")
+                or "a tailor"
+            )
+            create_notification(
+                user_id=updated["user"],
+                title="Tailor Assigned",
+                body=f"Your customization request is now assigned to {tailor_name}.",
+                kind="tailoring",
+                event_key="tailoring_request_customer_assigned",
+                entity_type="tailoring_request",
+                entity_id=updated.get("id"),
+                action_url=f"/tailoring/requests/{updated.get('id')}",
+            )
     if updated and (updated.get("tailor_id") or updated.get("assigned_tailor")):
         from apps.chats.repository import sync_tailoring_request_conversation
 

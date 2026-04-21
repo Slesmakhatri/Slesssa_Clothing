@@ -11,9 +11,9 @@ import { useAuth } from '../context/AuthContext';
 import {
   getDashboardSummary,
   listChatConversations,
+  listTailorAssignedRequests,
   listTailorMeasurements,
   listTailorProfiles,
-  listTailoringRequests,
   updateMeasurement,
   updateTailorProfile,
 } from '../services/api';
@@ -70,7 +70,7 @@ function TailorDashboardPage() {
   });
 
   function loadRequests() {
-    return listTailoringRequests()
+    return listTailorAssignedRequests()
       .then((items) => {
         if (import.meta.env.DEV) {
           console.log('Tailor assigned requests payload', items);
@@ -263,6 +263,7 @@ function TailorDashboardPage() {
 
   function renderAssignedRequests() {
     return (
+      <div className="tailor-workspace-stack">
         <div className="table-card tailor-panel">
           <SectionTitle eyebrow="Assigned Requests" title="Customization orders" text="Only requests assigned to your tailor account are listed here." align="start" />
           <PaginatedTable
@@ -297,6 +298,8 @@ function TailorDashboardPage() {
               </tr>
             )}
           />
+        </div>
+        <TailoringRequestThread request={activeRequest} onMessageCreated={refreshAfterUpdate} />
       </div>
     );
   }
@@ -538,7 +541,7 @@ function TailorDashboardPage() {
   return (
     <section className="role-module-page tailor-dashboard-page">
       {activeSection === 'overview' ? renderOverview() : null}
-      {activeSection === 'requests' ? renderRequestThread('Assigned requests', 'Review assigned customization orders, customer details, measurements, and design references.') : null}
+      {activeSection === 'requests' ? renderAssignedRequests() : null}
       {activeSection === 'measurements' ? renderMeasurements() : null}
       {activeSection === 'messages' ? renderMessages() : null}
       {activeSection === 'progress' ? renderRequestThread('Progress updates', 'Send production notes and move requests through pending, cutting, stitching, fitting, and completed stages.') : null}

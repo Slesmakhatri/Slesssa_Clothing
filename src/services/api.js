@@ -602,6 +602,11 @@ export async function listTailoringRequests() {
   return unwrapListResponse(payload);
 }
 
+export async function listTailorAssignedRequests() {
+  const payload = await apiRequest('/tailor/assigned-requests/', { requiresAuth: true });
+  return unwrapListResponse(payload);
+}
+
 export async function listReturnRequests() {
   const payload = await apiRequest('/return-requests/', { requiresAuth: true });
   return unwrapListResponse(payload);

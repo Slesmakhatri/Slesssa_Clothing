@@ -14,7 +14,7 @@ from apps.payments.repository import list_payments
 from apps.products.repository import list_products
 from apps.reviews.repository import list_reviews
 from apps.support.repository import list_support_messages
-from apps.tailoring.repository import list_tailoring_requests
+from apps.tailoring.repository import list_assigned_tailoring_requests, list_tailoring_requests
 from apps.vendors.repository import get_vendor_by_user_id, list_vendor_applications, list_vendors
 from common.mongo import clean_document, get_collection, prepare_document_for_mongo, utcnow
 
@@ -324,12 +324,18 @@ class TailorDashboardAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsTailorOrAdmin]
 
     def get(self, request):
-        requests = list_tailoring_requests(request.user)
+        requests = list_assigned_tailoring_requests(request.user)
         conversations = list_conversations(request.user, {"kind": "customer_tailor"})
         total_requests = len(requests)
         completed_requests = len([item for item in requests if item.get("status") == "completed"])
         active_statuses = {"accepted", "in_progress", "cutting", "stitching", "fitting", "discussion_ongoing"}
         completion_rate = round((completed_requests / total_requests) * 100, 1) if total_requests else 0
+        logger.debug(
+            "Tailor dashboard user_id=%s requests=%s recent=%s",
+            request.user.id,
+            total_requests,
+            [item.get("id") for item in requests[:5]],
+        )
         return Response(
             {
                 "assigned_requests": total_requests,

@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    TailorAssignedRequestsAPIView,
     MeasurementSuggestionAPIView,
     MeasurementViewSet,
     TailorMeasurementsAPIView,
@@ -20,5 +21,6 @@ router.register("tailoring-messages", TailoringMessageViewSet, basename="tailori
 
 urlpatterns = [
     path("measurement-suggestions/", MeasurementSuggestionAPIView.as_view(), name="measurement-suggestions"),
+    path("tailor/assigned-requests/", TailorAssignedRequestsAPIView.as_view(), name="tailor-assigned-requests"),
     path("tailor/measurements/", TailorMeasurementsAPIView.as_view(), name="tailor-measurements"),
 ] + router.urls

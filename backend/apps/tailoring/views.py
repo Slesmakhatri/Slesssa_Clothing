@@ -12,6 +12,7 @@ from .repository import (
     get_measurement_for_user,
     get_tailor_profile_for_user,
     get_tailoring_request_for_user,
+    list_assigned_tailoring_requests,
     list_measurements,
     list_tailor_measurements,
     list_tailor_profiles,
@@ -88,6 +89,14 @@ class TailorMeasurementsAPIView(views.APIView):
     def get(self, request):
         rows = list_tailor_measurements(request.user)
         return Response(TailorMeasurementSerializer(rows, many=True).data)
+
+
+class TailorAssignedRequestsAPIView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsTailorVendorOrAdmin]
+
+    def get(self, request):
+        documents = list_assigned_tailoring_requests(request.user)
+        return Response(TailoringRequestSerializer(documents, many=True).data)
 
 
 class TailorProfileViewSet(viewsets.ViewSet):
