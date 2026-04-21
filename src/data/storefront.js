@@ -1452,7 +1452,38 @@ const extraProductBlueprints = [
   }
 ];
 
-function buildProduct(product, imageUrl) {
+const fallbackVendorProfiles = [
+  {
+    id: 1,
+    user: 1,
+    slug: 'slessa-k',
+    brand_name: 'slessa k'
+  },
+  {
+    id: 2,
+    user: 6,
+    slug: 'slesma-chettri',
+    brand_name: 'slesma chettri'
+  },
+  {
+    id: 3,
+    user: 7,
+    slug: 'sahil-giri',
+    brand_name: 'Sahil Giri'
+  }
+];
+
+function getFallbackVendorProfile(product, productIndex) {
+  const seed = String(product?.audience || '').toLowerCase() === 'women'
+    ? productIndex + 1
+    : /kurta|blazer|jacket|dress|skirt/i.test(String(product?.category || ''))
+      ? productIndex + 2
+      : productIndex;
+  return fallbackVendorProfiles[seed % fallbackVendorProfiles.length];
+}
+
+function buildProduct(product, imageUrl, productIndex) {
+  const vendorProfile = getFallbackVendorProfile(product, productIndex);
   return {
     ...product,
     title: product.name,
@@ -1460,13 +1491,12 @@ function buildProduct(product, imageUrl) {
     hoverImage: imageUrl,
     gallery: [imageUrl],
     stock: 14,
-    vendor_name: 'slessa k',
-    vendor_detail: {
-      id: 1,
-      user: 1,
-      slug: 'slessa-k',
-      brand_name: 'slessa k'
-    }
+    vendor: vendorProfile.id,
+    vendor_id: vendorProfile.id,
+    vendor_user: vendorProfile.user,
+    vendor_user_id: vendorProfile.user,
+    vendor_name: vendorProfile.brand_name,
+    vendor_detail: vendorProfile
   };
 }
 
@@ -1496,7 +1526,7 @@ function getProductImagePool(product) {
 
 const productPhotoIndexes = {};
 
-export const storefrontProducts = [...productBlueprints, ...extraProductBlueprints].map((product) => {
+export const storefrontProducts = [...productBlueprints, ...extraProductBlueprints].map((product, productIndex) => {
   const garmentType = product.garmentType;
   const audience = String(product.audience || 'all').toLowerCase();
   const imageKey = `${audience}:${garmentType}`;
@@ -1504,7 +1534,7 @@ export const storefrontProducts = [...productBlueprints, ...extraProductBlueprin
   const nextIndex = productPhotoIndexes[imageKey] || 0;
   productPhotoIndexes[imageKey] = nextIndex + 1;
   const imageUrl = productImageOverrides[product.slug] || imagePool[nextIndex] || imagePool[imagePool.length - 1];
-  return buildProduct(product, imageUrl);
+  return buildProduct(product, imageUrl, productIndex);
 });
 
 export const storefrontMenus = {

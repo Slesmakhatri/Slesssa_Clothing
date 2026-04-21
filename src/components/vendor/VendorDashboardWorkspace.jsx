@@ -9,9 +9,9 @@ import {
   deleteProduct,
   getDashboardSummary,
   listCategories,
-  listOrders,
   listProductQuestions,
   listProducts,
+  listVendorOrders,
   listReturnRequests,
   listReviews,
   listVendors,
@@ -90,6 +90,12 @@ function splitCsv(value) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function itemMatchesVendor(item, userId, vendorId) {
+  const itemVendorUser = item?.vendor_user || item?.vendor_user_id || item?.vendor_detail?.user || item?.product_detail?.vendor_detail?.user;
+  const itemVendorId = item?.vendor || item?.vendor_id || item?.vendor_detail?.id || item?.product_detail?.vendor_detail?.id || item?.product_detail?.vendor;
+  return String(itemVendorUser || '') === String(userId || '') || String(itemVendorId || '') === String(vendorId || '');
 }
 
 function VendorMetricCard({ label, value, icon, tone = 'default', helper }) {
@@ -183,10 +189,10 @@ function VendorDashboardWorkspace({
     if (!user) return [];
     return orders.flatMap((order) =>
       (order.items || [])
-        .filter((item) => String(item.vendor_user || item.vendor_user_id || '') === String(user.id))
+        .filter((item) => itemMatchesVendor(item, user.id, vendorProfile?.id))
         .map((item) => ({ ...item, order_number: order.order_number, order_status: order.status }))
     );
-  }, [orders, user]);
+  }, [orders, user, vendorProfile?.id]);
 
   const payoutTotals = useMemo(() => {
     return vendorScopedItems.reduce(
@@ -237,7 +243,7 @@ function VendorDashboardWorkspace({
         getDashboardSummary('vendor'),
         listVendors(),
         listProducts({ mine: 1 }),
-        listOrders(),
+        listVendorOrders(),
         listReturnRequests(),
         listReviews(),
         listProductQuestions(),
@@ -256,6 +262,27 @@ function VendorDashboardWorkspace({
       setReviews(reviewList);
       setQuestions(questionList);
       setCategories(categoryList || []);
+      if (import.meta.env.DEV) {
+        console.debug('Vendor workspace payload', {
+          userId: user.id,
+          vendorProfileId: ownVendor?.id || null,
+          productsCount: productList.length,
+          ordersCount: orderList.length,
+          returnsCount: returnList.length,
+          recentOrders: orderList.slice(0, 5).map((order) => ({
+            id: order.id,
+            order_number: order.order_number,
+            vendor_user_ids: order.vendor_user_ids,
+            vendor_ids: order.vendor_ids,
+            items: (order.items || []).map((item) => ({
+              id: item.id,
+              product_name: item.product_name,
+              vendor: item.vendor,
+              vendor_user: item.vendor_user
+            }))
+          }))
+        });
+      }
       setShopForm({
         brand_name: ownVendor?.brand_name || '',
         description: ownVendor?.description || '',
@@ -1056,13 +1083,38 @@ function VendorDashboardWorkspace({
                       </div>
                       <div className="vendor-order-card__items">
                         {(order.items || [])
-                          .filter((item) => String(item.vendor_user || item.vendor_user_id || '') === String(user?.id))
+                          .filter((item) => itemMatchesVendor(item, user?.id, vendorProfile?.id))
                           .map((item) => (
                             <div key={item.id} className="vendor-order-line">
                               <span>{item.product_name}</span>
                               <span>{item.quantity} x {formatCurrency(item.price)}</span>
                             </div>
                           ))}
+                      </div>
+                      <div className="vendor-order-card__items">
+                        <div className="vendor-order-line">
+                          <span>Customer</span>
+                          <span>{order.full_name || order.user_detail?.full_name || order.email || 'Customer'}</span>
+                        </div>
+                        <div className="vendor-order-line">
+                          <span>Payment</span>
+                          <span>{order.payment_status || 'pending'}</span>
+                        </div>
+                        <div className="vendor-order-line">
+                          <span>Vendor Total</span>
+                          <span>{formatCurrency((order.items || []).filter((item) => itemMatchesVendor(item, user?.id, vendorProfile?.id)).reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0))}</span>
+                        </div>
+                        <div className="vendor-order-line">
+                          <span>Vendor Items</span>
+                          <span>{(order.items || []).filter((item) => itemMatchesVendor(item, user?.id, vendorProfile?.id)).length}</span>
+                        </div>
+                      </div>
+                      <div className="vendor-order-card__items">
+                        {(import.meta.env.DEV && (order.items || []).some((item) => itemMatchesVendor(item, user?.id, vendorProfile?.id))) ? (
+                          <div className="vendor-supporting-copy small">
+                            Debug: matched vendor order {order.order_number}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="vendor-order-card__controls">
                         <select value={orderDrafts[order.id]?.status || order.status} onChange={(event) => setOrderDrafts((current) => ({ ...current, [order.id]: { ...(current[order.id] || {}), status: event.target.value } }))}>

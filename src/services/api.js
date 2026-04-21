@@ -373,6 +373,11 @@ export async function listOrders() {
   return unwrapListResponse(payload);
 }
 
+export async function listVendorOrders() {
+  const payload = await apiRequest('/vendor/orders/', { requiresAuth: true });
+  return unwrapListResponse(payload);
+}
+
 export async function getOrder(id) {
   return apiRequest(`/orders/${id}/`, { requiresAuth: true });
 }

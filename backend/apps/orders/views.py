@@ -1,6 +1,7 @@
 from rest_framework import permissions, status, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsAdminRole
 from common.storage import store_uploaded_file
@@ -36,6 +37,15 @@ from .serializers import (
     VoucherSerializer,
     WishlistItemSerializer,
 )
+
+
+class VendorOrdersAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role not in {"vendor", "admin", "super_admin"}:
+            return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(OrderSerializer(list_orders(request.user), many=True).data)
 
 
 class CartViewSet(viewsets.ViewSet):
