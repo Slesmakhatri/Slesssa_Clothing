@@ -14,6 +14,7 @@ import {
   listReturnRequests,
   listReviews,
   listSupportMessages,
+  listTailorProfiles,
   listTailoringRequests,
   listUsers,
   listVendorApplications,
@@ -22,6 +23,7 @@ import {
   updateReturnRequest,
   updateReview,
   updateSupportMessage,
+  updateTailoringRequest,
   updateVendorApplication
 } from '../services/api';
 
@@ -61,8 +63,11 @@ function AdminDashboardPage() {
   const [vendorApplications, setVendorApplications] = useState([]);
   const [supportMessages, setSupportMessages] = useState([]);
   const [tailoringRequests, setTailoringRequests] = useState([]);
+  const [tailors, setTailors] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [returnDrafts, setReturnDrafts] = useState({});
+  const [tailoringDrafts, setTailoringDrafts] = useState({});
+  const [savingTailoringRequestId, setSavingTailoringRequestId] = useState(null);
 
   useEffect(() => {
     getDashboardSummary('admin').then(setSummary).catch(() => undefined);
@@ -79,6 +84,7 @@ function AdminDashboardPage() {
     listVendorApplications().then(setVendorApplications).catch(() => undefined);
     listSupportMessages().then(setSupportMessages).catch(() => undefined);
     listTailoringRequests().then(setTailoringRequests).catch(() => undefined);
+    listTailorProfiles().then(setTailors).catch(() => undefined);
   }, []);
 
   const stats = [
@@ -137,6 +143,35 @@ function AdminDashboardPage() {
       setStatusMessage(`Return request updated to ${String(updated.status || '').replaceAll('_', ' ')}.`);
     } catch (error) {
       setStatusMessage(error?.payload?.detail || 'Could not update return request.');
+    }
+  }
+
+  async function updateTailoringAssignment(request) {
+    const draft = tailoringDrafts[request.id] || {};
+    if (!draft.assigned_tailor && !draft.status) {
+      setStatusMessage('Choose a tailor or status first.');
+      return;
+    }
+    setSavingTailoringRequestId(request.id);
+    try {
+      const payload = {
+        assigned_tailor: draft.assigned_tailor ? Number(draft.assigned_tailor) : request.assigned_tailor || null,
+        status: draft.status || request.status || (draft.assigned_tailor ? 'assigned' : undefined),
+      };
+      const updated = await updateTailoringRequest(request.id, payload);
+      setTailoringRequests((current) => current.map((item) => (item.id === request.id ? updated : item)));
+      setTailoringDrafts((current) => ({
+        ...current,
+        [request.id]: {
+          assigned_tailor: updated.assigned_tailor || '',
+          status: updated.status || '',
+        }
+      }));
+      setStatusMessage(`Tailoring request ${request.id} updated.`);
+    } catch (error) {
+      setStatusMessage(error?.payload?.detail || error?.message || 'Could not update tailoring request.');
+    } finally {
+      setSavingTailoringRequestId(null);
     }
   }
 
@@ -417,19 +452,59 @@ function AdminDashboardPage() {
           columns={[
             { key: 'request', label: 'Request' },
             { key: 'customer', label: 'Customer' },
+            { key: 'measurements', label: 'Measurements' },
             { key: 'assignment', label: 'Assignment' },
             { key: 'status', label: 'Status' },
-            { key: 'vendor', label: 'Vendor' }
+            { key: 'vendor', label: 'Vendor' },
+            { key: 'actions', label: 'Actions' }
           ]}
           itemLabel="tailoring requests"
           initialPageSize={10}
           renderRow={(request, _index, key) => (
             <tr key={key}>
-              <td>{request.clothing_type}</td>
+              <td>
+                <strong>{request.reference_product_name || request.clothing_type}</strong>
+                <div className="vendor-table-meta">Request #{request.id}</div>
+              </td>
               <td>{request.user_detail?.full_name || request.user_detail?.email}</td>
-              <td>{request.assigned_tailor_detail?.full_name || request.assigned_tailor_detail?.email || 'Unassigned'}</td>
-              <td>{String(request.status || '').replaceAll('_', ' ')}</td>
+              <td>{request.measurement_detail ? 'Linked' : 'Missing'}</td>
+              <td>
+                <select
+                  className="form-select form-select-sm"
+                  value={tailoringDrafts[request.id]?.assigned_tailor ?? request.assigned_tailor ?? ''}
+                  onChange={(event) => setTailoringDrafts((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), assigned_tailor: event.target.value } }))}
+                >
+                  <option value="">Unassigned</option>
+                  {tailors.map((tailor) => (
+                    <option key={tailor.id} value={tailor.user}>
+                      {tailor.full_name || tailor.user_detail?.full_name || tailor.user_detail?.email}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <select
+                  className="form-select form-select-sm"
+                  value={tailoringDrafts[request.id]?.status ?? request.status ?? 'pending'}
+                  onChange={(event) => setTailoringDrafts((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), status: event.target.value } }))}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="discussion_ongoing">Discussion Ongoing</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="cutting">Cutting</option>
+                  <option value="stitching">Stitching</option>
+                  <option value="fitting">Fitting</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </td>
               <td>{request.vendor_detail?.brand_name || 'Internal'}</td>
+              <td>
+                <button type="button" className="btn btn-sm btn-outline-dark" disabled={savingTailoringRequestId === request.id} onClick={() => updateTailoringAssignment(request)}>
+                  {savingTailoringRequestId === request.id ? 'Saving...' : 'Save'}
+                </button>
+              </td>
             </tr>
           )}
         />

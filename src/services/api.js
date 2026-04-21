@@ -782,7 +782,7 @@ export async function createTailoringRequest(formData) {
 export async function updateTailoringRequest(id, payload) {
   return apiRequest(`/tailoring-requests/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: payload instanceof FormData ? payload : JSON.stringify(payload),
     requiresAuth: true
   });
 }

@@ -10,14 +10,36 @@ import { getRecommendations, listProducts } from '../services/api';
 import { buildCuratedCollections } from '../services/catalog';
 import { getRecentViewedProductIds } from '../services/recentViews';
 
-function buildHomepageRecommendationFallback(sections, collections) {
-  const recommendedItems = collections.recommended?.length ? collections.recommended : collections.trending || [];
-  const trendingItems = collections.trending?.length ? collections.trending : collections.catalog || [];
+function pickFirstProductSet(...groups) {
+  return groups.find((group) => Array.isArray(group) && group.length) || [];
+}
+
+function buildHomepageRecommendationFallback(sections, collections, recentViewedIds = []) {
+  const recentViewedItems = recentViewedIds.length
+    ? collections.catalog.filter((item) => recentViewedIds.includes(Number(item.id)))
+    : [];
+  const recommendedItems = pickFirstProductSet(
+    recentViewedItems,
+    collections.recommended,
+    collections.trending,
+    collections.newIn,
+    collections.catalog
+  );
+  const trendingItems = pickFirstProductSet(
+    collections.trending,
+    collections.bestSellers,
+    collections.newIn,
+    collections.catalog
+  );
   return {
     ...(sections || {}),
     recommended_for_you: {
       title: sections?.recommended_for_you?.title || 'Recommended for You',
-      description: sections?.recommended_for_you?.description || 'New-user fallback from top-rated catalog products.',
+      description:
+        sections?.recommended_for_you?.description ||
+        (recentViewedItems.length
+          ? 'Inspired by pieces you recently viewed.'
+          : 'Fallback picks from active catalog favorites and fresh arrivals.'),
       items: sections?.recommended_for_you?.items?.length ? sections.recommended_for_you.items : recommendedItems.slice(0, 8)
     },
     trending_now: {
@@ -30,20 +52,28 @@ function buildHomepageRecommendationFallback(sections, collections) {
 
 function HomePage() {
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [collections, setCollections] = useState(buildCuratedCollections(storefrontProducts));
+  const fallbackCollections = useMemo(() => buildCuratedCollections(storefrontProducts), []);
+  const [collections, setCollections] = useState(fallbackCollections);
   const [recommendationSections, setRecommendationSections] = useState(null);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const [recommendationLoading, setRecommendationLoading] = useState(true);
+  const recentViewedIds = useMemo(() => getRecentViewedProductIds(), []);
 
   useEffect(() => {
+    setCatalogLoading(true);
     listProducts()
-      .then((items) => setCollections(buildCuratedCollections(items)))
-      .catch(() => setCollections(buildCuratedCollections(storefrontProducts)));
+      .then((items) => {
+        const nextCollections = items.length ? buildCuratedCollections(items) : fallbackCollections;
+        setCollections(nextCollections);
+      })
+      .catch(() => setCollections(fallbackCollections))
+      .finally(() => setCatalogLoading(false));
 
-    getRecommendations({ recent_viewed_ids: getRecentViewedProductIds() })
+    getRecommendations({ recent_viewed_ids: recentViewedIds })
       .then((payload) => setRecommendationSections(payload.sections || null))
       .catch(() => setRecommendationSections(null))
       .finally(() => setRecommendationLoading(false));
-  }, []);
+  }, [fallbackCollections, recentViewedIds]);
 
   const tailoringProducts = useMemo(
     () =>
@@ -53,20 +83,27 @@ function HomePage() {
     [collections.catalog]
   );
   const bestSellerProducts = useMemo(
-    () => (collections.bestSellers?.length ? collections.bestSellers : collections.trending).slice(0, 4),
-    [collections.bestSellers, collections.trending]
+    () =>
+      pickFirstProductSet(
+        collections.bestSellers,
+        collections.recommended,
+        collections.trending,
+        collections.newIn,
+        collections.catalog
+      ).slice(0, 4),
+    [collections.bestSellers, collections.catalog, collections.newIn, collections.recommended, collections.trending]
   );
   const homepageRecommendationSections = useMemo(
-    () => buildHomepageRecommendationFallback(recommendationSections, collections),
-    [collections, recommendationSections]
+    () => buildHomepageRecommendationFallback(recommendationSections, collections, recentViewedIds),
+    [collections, recommendationSections, recentViewedIds]
   );
   const featuredProducts = useMemo(
-    () => (collections.recommended?.length ? collections.recommended : collections.catalog).slice(0, 4),
-    [collections.catalog, collections.recommended]
+    () => pickFirstProductSet(collections.recommended, collections.trending, collections.newIn, collections.catalog).slice(0, 4),
+    [collections.catalog, collections.newIn, collections.recommended, collections.trending]
   );
   const newArrivalProducts = useMemo(
-    () => (collections.newIn?.length ? collections.newIn : collections.catalog).slice(0, 4),
-    [collections.catalog, collections.newIn]
+    () => pickFirstProductSet(collections.newIn, collections.trending, collections.catalog).slice(0, 4),
+    [collections.catalog, collections.newIn, collections.trending]
   );
   const recommendedForYouProducts = useMemo(
     () => (homepageRecommendationSections.recommended_for_you?.items || []).slice(0, 4),
@@ -120,6 +157,7 @@ function HomePage() {
           text="Browse a tighter edit of premium pieces with direct purchase and customization actions."
           products={featuredProducts}
           fallbackProducts={collections.catalog}
+          loading={catalogLoading}
           onQuickView={setSelectedProduct}
           className="homepage-product-section"
         />
@@ -131,6 +169,7 @@ function HomePage() {
           products={newArrivalProducts}
           fallbackProducts={collections.catalog}
           action={{ to: '/shop?curated=New%20Arrivals', label: 'Explore New Arrivals' }}
+          loading={catalogLoading}
           onQuickView={setSelectedProduct}
         />
 
@@ -141,6 +180,7 @@ function HomePage() {
           products={tailoringProducts}
           fallbackProducts={collections.catalog}
           action={{ to: '/tailoring', label: 'Start Customization' }}
+          loading={catalogLoading}
           onQuickView={setSelectedProduct}
         />
 
@@ -149,7 +189,8 @@ function HomePage() {
           title="High-conviction styles with cleaner product presentation."
           text="Large clothing images, stable spacing, quick actions, and a simpler premium visual rhythm."
           products={bestSellerProducts}
-          fallbackProducts={collections.trending || collections.catalog}
+          fallbackProducts={pickFirstProductSet(collections.trending, collections.newIn, collections.catalog)}
+          loading={catalogLoading}
           onQuickView={setSelectedProduct}
         />
 
@@ -158,8 +199,8 @@ function HomePage() {
           title="Personalized picks from catalog and shopping signals."
           text={homepageRecommendationSections.recommended_for_you?.description || 'Fallback products keep this shelf filled for new users.'}
           products={recommendedForYouProducts}
-          fallbackProducts={featuredProducts}
-          loading={recommendationLoading}
+          fallbackProducts={pickFirstProductSet(featuredProducts, collections.trending, collections.newIn, collections.catalog)}
+          loading={catalogLoading || recommendationLoading}
           onQuickView={setSelectedProduct}
         />
 
@@ -168,8 +209,8 @@ function HomePage() {
           title="Popular styles from the current Slessaa catalog."
           text={homepageRecommendationSections.trending_now?.description || 'Trending catalog products with the same stable ecommerce grid.'}
           products={trendingNowProducts}
-          fallbackProducts={bestSellerProducts}
-          loading={recommendationLoading}
+          fallbackProducts={pickFirstProductSet(bestSellerProducts, collections.newIn, collections.catalog)}
+          loading={catalogLoading || recommendationLoading}
           onQuickView={setSelectedProduct}
         />
       </div>

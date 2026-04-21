@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import ProductCard from '../shop/ProductCard';
 
 const productGridColumnClass = 'col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex';
+const skeletonCards = Array.from({ length: 4 }, (_, index) => index);
 
 function mergeProducts(products = [], fallbackProducts = [], limit = 4) {
   const seen = new Set();
@@ -50,9 +51,25 @@ function ProductSection({
         </div>
 
         {loading && !items.length ? (
-          <div className="filter-empty-state compact homepage-empty-state">
-            <h4>Loading products</h4>
-            <p>Preparing this section from the live catalog.</p>
+          <div className="row g-3 g-lg-4 align-items-stretch product-section-grid" aria-hidden="true">
+            {skeletonCards.map((index) => (
+              <div key={index} className={productGridColumnClass}>
+                <div className="product-card product-card-skeleton ecommerce-product-card w-100">
+                  <div className="product-card-skeleton__media shimmer-block"></div>
+                  <div className="product-card-skeleton__body">
+                    <span className="product-card-skeleton__eyebrow shimmer-block"></span>
+                    <span className="product-card-skeleton__title shimmer-block"></span>
+                    <span className="product-card-skeleton__price shimmer-block"></span>
+                    <span className="product-card-skeleton__copy shimmer-block"></span>
+                    <span className="product-card-skeleton__copy short shimmer-block"></span>
+                    <div className="product-card-skeleton__actions">
+                      <span className="product-card-skeleton__button shimmer-block"></span>
+                      <span className="product-card-skeleton__button shimmer-block"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : items.length ? (
           <div className="row g-3 g-lg-4 align-items-stretch product-section-grid">

@@ -11,6 +11,8 @@ import {
   listCategories,
   listProductQuestions,
   listProducts,
+  listTailorProfiles,
+  listTailoringRequests,
   listVendorOrders,
   listReturnRequests,
   listReviews,
@@ -20,6 +22,7 @@ import {
   updateProductQuestion,
   updateReturnRequest,
   updateReview,
+  updateTailoringRequest,
   updateVendorProfile
 } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -147,6 +150,8 @@ function VendorDashboardWorkspace({
   const [reviews, setReviews] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [tailoringRequests, setTailoringRequests] = useState([]);
+  const [tailors, setTailors] = useState([]);
 
   const [shopForm, setShopForm] = useState({
     brand_name: '',
@@ -167,6 +172,7 @@ function VendorDashboardWorkspace({
   const [orderDrafts, setOrderDrafts] = useState({});
   const [returnDrafts, setReturnDrafts] = useState({});
   const [answerDrafts, setAnswerDrafts] = useState({});
+  const [tailoringDrafts, setTailoringDrafts] = useState({});
   const [settingsForm, setSettingsForm] = useState({
     full_name: user?.full_name || '',
     email: user?.email || '',
@@ -239,7 +245,7 @@ function VendorDashboardWorkspace({
     }
     setError('');
     try {
-      const [summaryData, vendorList, productList, orderList, returnList, reviewList, questionList, categoryList] = await Promise.all([
+      const [summaryData, vendorList, productList, orderList, returnList, reviewList, questionList, categoryList, tailoringRequestList, tailorList] = await Promise.all([
         getDashboardSummary('vendor'),
         listVendors(),
         listProducts({ mine: 1 }),
@@ -247,7 +253,9 @@ function VendorDashboardWorkspace({
         listReturnRequests(),
         listReviews(),
         listProductQuestions(),
-        listCategories()
+        listCategories(),
+        listTailoringRequests(),
+        listTailorProfiles()
       ]);
 
       const ownVendor =
@@ -262,6 +270,8 @@ function VendorDashboardWorkspace({
       setReviews(reviewList);
       setQuestions(questionList);
       setCategories(categoryList || []);
+      setTailoringRequests(tailoringRequestList || []);
+      setTailors(tailorList || []);
       if (import.meta.env.DEV) {
         console.debug('Vendor workspace payload', {
           userId: user.id,
@@ -269,6 +279,7 @@ function VendorDashboardWorkspace({
           productsCount: productList.length,
           ordersCount: orderList.length,
           returnsCount: returnList.length,
+          tailoringRequestsCount: (tailoringRequestList || []).length,
           recentOrders: orderList.slice(0, 5).map((order) => ({
             id: order.id,
             order_number: order.order_number,
@@ -323,6 +334,17 @@ function VendorDashboardWorkspace({
         )
       );
       setAnswerDrafts(Object.fromEntries(questionList.map((item) => [item.id, item.answer || ''])));
+      setTailoringDrafts(
+        Object.fromEntries(
+          (tailoringRequestList || []).map((item) => [
+            item.id,
+            {
+              assigned_tailor: item.assigned_tailor || '',
+              status: item.status || 'pending'
+            }
+          ])
+        )
+      );
     } catch (requestError) {
       setError(requestError?.payload?.detail || requestError.message || 'Unable to load the vendor workspace.');
     } finally {
@@ -641,6 +663,32 @@ function VendorDashboardWorkspace({
       await loadWorkspace({ silent: true });
     } catch (requestError) {
       setError(requestError?.payload?.detail || requestError.message || 'Unable to save answer.');
+    } finally {
+      setSavingSection('');
+    }
+  }
+
+  async function handleTailoringAssignment(requestId) {
+    const existing = tailoringRequests.find((item) => item.id === requestId);
+    const draft = tailoringDrafts[requestId] || {};
+    setSavingSection(`tailoring-${requestId}`);
+    setError('');
+    try {
+      const updated = await updateTailoringRequest(requestId, {
+        assigned_tailor: draft.assigned_tailor ? Number(draft.assigned_tailor) : existing?.assigned_tailor || null,
+        status: draft.status || existing?.status || (draft.assigned_tailor ? 'assigned' : 'pending')
+      });
+      setTailoringRequests((current) => current.map((item) => (item.id === requestId ? updated : item)));
+      setTailoringDrafts((current) => ({
+        ...current,
+        [requestId]: {
+          assigned_tailor: updated.assigned_tailor || '',
+          status: updated.status || 'pending'
+        }
+      }));
+      pushNotice(`Customization request #${requestId} updated.`);
+    } catch (requestError) {
+      setError(requestError?.payload?.detail || requestError?.message || 'Unable to update customization assignment.');
     } finally {
       setSavingSection('');
     }
@@ -1023,43 +1071,112 @@ function VendorDashboardWorkspace({
           ) : null}
 
           {activeSection === 'customized' ? (
-            <div className="table-card">
-              <VendorSectionHeader title="Customized Services" description="Define your tailoring and custom design offering separately from ready-made products." />
-              <form className="vendor-form-grid" onSubmit={handleCustomizationSave}>
-                <label>
-                  Customization Specialty
-                  <input value={customizationForm.customization_specialty} onChange={(event) => setCustomizationForm((current) => ({ ...current, customization_specialty: event.target.value }))} />
-                </label>
-                <label>
-                  Starting Price Guidance
-                  <input value={customizationForm.starting_price} onChange={(event) => setCustomizationForm((current) => ({ ...current, starting_price: event.target.value }))} />
-                </label>
-                <label className="vendor-form-grid__full">
-                  Supported Product Types
-                  <input placeholder="Kurta, Sherwani, Blazer" value={customizationForm.supported_product_types} onChange={(event) => setCustomizationForm((current) => ({ ...current, supported_product_types: event.target.value }))} />
-                </label>
-                <label className="vendor-form-grid__full">
-                  Fabrics / Materials
-                  <input placeholder="Silk Blend, Cotton, Linen" value={customizationForm.fabrics_materials} onChange={(event) => setCustomizationForm((current) => ({ ...current, fabrics_materials: event.target.value }))} />
-                </label>
-                <label className="vendor-form-grid__full">
-                  Design Specialties
-                  <input placeholder="Minimal tailoring, Nepali motifs" value={customizationForm.design_specialties} onChange={(event) => setCustomizationForm((current) => ({ ...current, design_specialties: event.target.value }))} />
-                </label>
-                <label className="vendor-form-grid__full">
-                  Measurement Requirements
-                  <input placeholder="Chest, waist, shoulder, inseam" value={customizationForm.measurement_requirements} onChange={(event) => setCustomizationForm((current) => ({ ...current, measurement_requirements: event.target.value }))} />
-                </label>
-                <label className="vendor-form-grid__full">
-                  Customization Notes
-                  <textarea rows="4" value={customizationForm.customization_notes} onChange={(event) => setCustomizationForm((current) => ({ ...current, customization_notes: event.target.value }))} />
-                </label>
-                <div className="vendor-form-actions vendor-form-grid__full">
-                  <button type="submit" className="btn btn-dark" disabled={savingSection === 'customized'}>
-                    {savingSection === 'customized' ? 'Saving...' : 'Save Customized Services'}
-                  </button>
-                </div>
-              </form>
+            <div className="vendor-section-stack">
+              <div className="table-card">
+                <VendorSectionHeader title="Customized Services" description="Define your tailoring and custom design offering separately from ready-made products." />
+                <form className="vendor-form-grid" onSubmit={handleCustomizationSave}>
+                  <label>
+                    Customization Specialty
+                    <input value={customizationForm.customization_specialty} onChange={(event) => setCustomizationForm((current) => ({ ...current, customization_specialty: event.target.value }))} />
+                  </label>
+                  <label>
+                    Starting Price Guidance
+                    <input value={customizationForm.starting_price} onChange={(event) => setCustomizationForm((current) => ({ ...current, starting_price: event.target.value }))} />
+                  </label>
+                  <label className="vendor-form-grid__full">
+                    Supported Product Types
+                    <input placeholder="Kurta, Sherwani, Blazer" value={customizationForm.supported_product_types} onChange={(event) => setCustomizationForm((current) => ({ ...current, supported_product_types: event.target.value }))} />
+                  </label>
+                  <label className="vendor-form-grid__full">
+                    Fabrics / Materials
+                    <input placeholder="Silk Blend, Cotton, Linen" value={customizationForm.fabrics_materials} onChange={(event) => setCustomizationForm((current) => ({ ...current, fabrics_materials: event.target.value }))} />
+                  </label>
+                  <label className="vendor-form-grid__full">
+                    Design Specialties
+                    <input placeholder="Minimal tailoring, Nepali motifs" value={customizationForm.design_specialties} onChange={(event) => setCustomizationForm((current) => ({ ...current, design_specialties: event.target.value }))} />
+                  </label>
+                  <label className="vendor-form-grid__full">
+                    Measurement Requirements
+                    <input placeholder="Chest, waist, shoulder, inseam" value={customizationForm.measurement_requirements} onChange={(event) => setCustomizationForm((current) => ({ ...current, measurement_requirements: event.target.value }))} />
+                  </label>
+                  <label className="vendor-form-grid__full">
+                    Customization Notes
+                    <textarea rows="4" value={customizationForm.customization_notes} onChange={(event) => setCustomizationForm((current) => ({ ...current, customization_notes: event.target.value }))} />
+                  </label>
+                  <div className="vendor-form-actions vendor-form-grid__full">
+                    <button type="submit" className="btn btn-dark" disabled={savingSection === 'customized'}>
+                      {savingSection === 'customized' ? 'Saving...' : 'Save Customized Services'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+              <div className="table-card">
+                <VendorSectionHeader title="Incoming Custom Requests" description="Assign customer customization work to a tailor so it reaches the tailor dashboard immediately." />
+                {tailoringRequests.length ? (
+                  <PaginatedTable
+                    items={tailoringRequests}
+                    columns={[
+                      { key: 'request', label: 'Request' },
+                      { key: 'customer', label: 'Customer' },
+                      { key: 'measurements', label: 'Measurements' },
+                      { key: 'assignment', label: 'Assign Tailor' },
+                      { key: 'status', label: 'Status' },
+                      { key: 'action', label: 'Action' }
+                    ]}
+                    tableClassName="vendor-data-table"
+                    itemLabel="customization requests"
+                    initialPageSize={5}
+                    renderRow={(request, _index, key) => (
+                      <tr key={key}>
+                        <td>
+                          <strong>{request.reference_product_name || request.clothing_type}</strong>
+                          <div className="vendor-table-meta">Request #{request.id}</div>
+                        </td>
+                        <td>{request.user_detail?.full_name || request.user_detail?.email || 'Customer'}</td>
+                        <td>{request.measurement_detail ? 'Linked' : 'Missing'}</td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm"
+                            value={tailoringDrafts[request.id]?.assigned_tailor ?? request.assigned_tailor ?? ''}
+                            onChange={(event) => setTailoringDrafts((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), assigned_tailor: event.target.value } }))}
+                          >
+                            <option value="">Unassigned</option>
+                            {tailors.map((tailor) => (
+                              <option key={tailor.id} value={tailor.user}>
+                                {tailor.full_name || tailor.user_detail?.full_name || tailor.user_detail?.email}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            className="form-select form-select-sm"
+                            value={tailoringDrafts[request.id]?.status ?? request.status ?? 'pending'}
+                            onChange={(event) => setTailoringDrafts((current) => ({ ...current, [request.id]: { ...(current[request.id] || {}), status: event.target.value } }))}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="assigned">Assigned</option>
+                            <option value="discussion_ongoing">Discussion Ongoing</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="cutting">Cutting</option>
+                            <option value="stitching">Stitching</option>
+                            <option value="fitting">Fitting</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button type="button" className="btn btn-sm btn-outline-dark" disabled={savingSection === `tailoring-${request.id}`} onClick={() => handleTailoringAssignment(request.id)}>
+                            {savingSection === `tailoring-${request.id}` ? 'Saving...' : 'Save'}
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  />
+                ) : (
+                  <div className="empty-state-sm">No customization requests routed to your shop yet.</div>
+                )}
+              </div>
             </div>
           ) : null}
 
