@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import ProtectedRoute from './components/auth/ProtectedRoute';
 import RoleRoute from './components/auth/RoleRoute';
 import StorefrontRoute from './components/auth/StorefrontRoute';
 import Layout from './components/layout/Layout';
