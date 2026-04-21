@@ -6,6 +6,7 @@ import ProductCard from '../components/shop/ProductCard';
 import SectionTitle from '../components/common/SectionTitle';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
+import { buildOrderDetailsPath } from '../routes/config';
 import { createReturnRequest, deleteProductQuestion, deleteReturnRequest, deleteReview, getDashboardSummary, listOrders, listProductQuestions, listProducts, listReturnRequests, listReviews, listTailoringRequests, listVouchers, updateProductQuestion, updateReview } from '../services/api';
 import { normalizeProduct } from '../services/catalog';
 
@@ -286,7 +287,7 @@ function CustomerDashboardPage({ initialFocusSection = '' }) {
                       const orderReturnItems = deliveredOrderItems.filter((entry) => String(entry.orderId) === String(item.id));
                       return (
                         <tr key={item.id}>
-                          <td><Link to={`/track-order?order=${item.id}`}>{item.order_number}</Link></td>
+                          <td><Link to={buildOrderDetailsPath(item.id)}>{item.order_number}</Link></td>
                           <td>{item.status}</td>
                           <td>{item.payment_status || item.payment_method}</td>
                           <td>NPR {Number(item.total).toLocaleString()}</td>
