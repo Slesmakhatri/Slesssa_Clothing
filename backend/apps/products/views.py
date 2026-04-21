@@ -20,6 +20,7 @@ from .repository import (
     update_product,
 )
 from .serializers import CategorySerializer, ProductSerializer
+import json
 
 
 def _mapping_or_empty(value):
@@ -111,6 +112,77 @@ class ProductViewSet(viewsets.ViewSet):
         except Exception:
             print('DEBUG: Unable to cast request.data to dict for logging')
         payload = dict(request.data)
+
+        # Normalize payload values: handle lists from multipart, JSON-encoded strings, and string booleans/numbers
+        def _try_parse_json(val):
+            if not isinstance(val, str):
+                return val
+            s = val.strip()
+            if (s.startswith('{') and s.endswith('}')) or (s.startswith('[') and s.endswith(']')):
+                try:
+                    return json.loads(s)
+                except Exception:
+                    return val
+            return val
+
+        def _first_if_list(val):
+            if isinstance(val, (list, tuple)) and val:
+                return val[0]
+            return val
+
+        for key in list(payload.keys()):
+            try:
+                v = payload.get(key)
+                v = _first_if_list(v)
+                v = _try_parse_json(v)
+                # coerce booleans
+                if key in {'is_customizable', 'is_featured', 'is_new_arrival', 'is_active'}:
+                    if isinstance(v, str):
+                        lv = v.strip().lower()
+                        payload[key] = lv in {'true', '1', 'yes', 'on'}
+                    else:
+                        payload[key] = bool(v) if v is not None else False
+                    continue
+                # coerce integers
+                if key in {'vendor', 'category', 'stock', 'popularity'}:
+                    try:
+                        payload[key] = int(v)
+                        continue
+                    except Exception:
+                        # leave as-is; serializer will catch invalid ints
+                        payload[key] = v
+                        continue
+                # coerce numbers
+                if key in {'price', 'discount_price', 'rating'}:
+                    try:
+                        payload[key] = float(v)
+                        continue
+                    except Exception:
+                        payload[key] = v
+                        continue
+                # lists for sizes/colors/fabric_options
+                if key in {'sizes', 'colors', 'fabric_options', 'images', 'eco_badges'}:
+                    if isinstance(v, str):
+                        parsed = _try_parse_json(v)
+                        if isinstance(parsed, list):
+                            payload[key] = parsed
+                        else:
+                            # comma separated fallback
+                            payload[key] = [item.strip() for item in v.split(',') if item.strip()]
+                    else:
+                        payload[key] = v
+                    continue
+                # product_type and text fields: ensure strings
+                if key in {'product_type', 'name', 'description', 'sustainability_guidance', 'customization_note', 'badge', 'slug'}:
+                    if v is None:
+                        payload[key] = ''
+                    else:
+                        payload[key] = str(v)
+                    continue
+                # default assignment
+                payload[key] = v
+            except Exception as exc:
+                print(f'DEBUG: normalization error for {key}: {exc}')
         # Detailed debug of incoming keys and value types
         try:
             for k, v in request.data.items():
