@@ -75,6 +75,7 @@ export const VENDOR_NAV_ITEMS = [
   { label: 'Returns', to: ROUTE_PATHS.vendorReturns, icon: 'bi-arrow-counterclockwise' },
   { label: 'Reviews & Questions', to: '/dashboard/vendor/reviews-questions', icon: 'bi-chat-left-text' },
   { label: 'Messages', to: '/dashboard/vendor/messages', icon: 'bi-chat-dots' },
+  { label: 'Support', to: '/dashboard/vendor/support', icon: 'bi-headset' },
   { label: 'Payouts', to: '/dashboard/vendor/payouts', icon: 'bi-cash-stack' },
   { label: 'Settings', to: '/dashboard/vendor/settings', icon: 'bi-gear' }
 ];
