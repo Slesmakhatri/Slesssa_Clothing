@@ -7,6 +7,7 @@ from common.storage import store_uploaded_file
 
 from .repository import (
     add_cart_item,
+    cancel_return_request,
     add_wishlist_item,
     create_order,
     create_return_request,
@@ -218,6 +219,16 @@ class ReturnRequestViewSet(viewsets.ViewSet):
 
     def update(self, request, pk=None):
         return self.partial_update(request, pk=pk)
+
+    def destroy(self, request, pk=None):
+        document = get_return_request_for_user(request.user, pk)
+        if not document:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            cancel_return_request(request.user, pk)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class VoucherViewSet(viewsets.ViewSet):

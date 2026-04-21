@@ -3,8 +3,10 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { mainNavLinks, storefrontHighlights } from '../../data/storefront';
+import { storefrontHighlights } from '../../data/storefront';
+import { MAIN_NAV_LINKS, ROUTE_PATHS } from '../../routes/config';
 import { getDashboardPath } from '../../utils/roleRouting';
+import { listChatConversations } from '../../services/api';
 import SearchBar from '../common/SearchBar';
 
 function formatNotificationTime(value) {
@@ -35,6 +37,7 @@ function Navbar({
   const { wishlistCount } = useWishlist();
   const { isAuthenticated, user, logout } = useAuth();
   const showCustomerTools = !isAuthenticated || user?.role === 'customer';
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
 
   function closeMenu() {
     setOpen(false);
@@ -46,6 +49,33 @@ function Navbar({
   useEffect(() => {
     closeMenu();
   }, [location.pathname]);
+
+  useEffect(() => {
+    let active = true;
+    let timer = null;
+
+    async function loadMessageCount() {
+      if (!isAuthenticated || user?.role !== 'customer') {
+        if (active) setMessageUnreadCount(0);
+        return;
+      }
+      try {
+        const conversations = await listChatConversations();
+        if (active) {
+          setMessageUnreadCount(conversations.reduce((sum, item) => sum + Number(item.unread_count || 0), 0));
+        }
+      } catch {
+        if (active) setMessageUnreadCount(0);
+      }
+    }
+
+    loadMessageCount();
+    timer = window.setInterval(loadMessageCount, 30000);
+    return () => {
+      active = false;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [isAuthenticated, user?.id, user?.role]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -210,8 +240,8 @@ function Navbar({
             ))}
           </div>
           <div className="utility-links">
-            <Link to="/track-order">Track Order</Link>
-            <Link to="/contact">Contact</Link>
+            <Link to={ROUTE_PATHS.trackOrder}>Track Order</Link>
+            <Link to={ROUTE_PATHS.contact}>Contact</Link>
           </div>
         </div>
       </div>
@@ -234,7 +264,7 @@ function Navbar({
 
             <div className="navbar-center">
               <ul className="navbar-nav-center">
-                {mainNavLinks.map((link) => (
+                {MAIN_NAV_LINKS.map((link) => (
                   <li key={link.path} className="nav-item">
                     <NavLink className="nav-link nav-link-nowrap" to={link.path} onClick={closeMenu}>
                       <span className="nav-link-label">{link.label}</span>
@@ -291,11 +321,17 @@ function Navbar({
                 {renderAccountTools()}
                 {showCustomerTools ? (
                   <>
-                    <Link to="/wishlist" className="tool-icon" aria-label="Wishlist" onClick={closeMenu}>
+                    <Link to={ROUTE_PATHS.wishlist} className="tool-icon" aria-label="Wishlist" onClick={closeMenu}>
                       <i className="bi bi-heart"></i>
                       <span className="tool-badge">{wishlistCount}</span>
                     </Link>
-                    <Link to="/cart" className="tool-icon" aria-label="Cart" onClick={closeMenu}>
+                    {isAuthenticated ? (
+                      <Link to={ROUTE_PATHS.messages} className="tool-icon" aria-label="Messages" onClick={closeMenu}>
+                        <i className="bi bi-chat-dots"></i>
+                        <span className="tool-badge">{messageUnreadCount}</span>
+                      </Link>
+                    ) : null}
+                    <Link to={ROUTE_PATHS.cart} className="tool-icon" aria-label="Cart" onClick={closeMenu}>
                       <i className="bi bi-bag"></i>
                       <span className="tool-badge">{cartCount}</span>
                     </Link>
@@ -312,7 +348,7 @@ function Navbar({
 
             <div className="navbar-mobile-actions">
               {showCustomerTools ? (
-                <Link to="/cart" className="tool-icon mobile-cart-icon" aria-label="Cart" onClick={closeMenu}>
+                <Link to={ROUTE_PATHS.cart} className="tool-icon mobile-cart-icon" aria-label="Cart" onClick={closeMenu}>
                   <i className="bi bi-bag"></i>
                   <span className="tool-badge">{cartCount}</span>
                 </Link>
@@ -341,7 +377,7 @@ function Navbar({
               />
             </div>
             <ul className="navbar-mobile-links">
-              {mainNavLinks.map((link) => (
+              {MAIN_NAV_LINKS.map((link) => (
                 <li key={link.path} className="nav-item">
                   <NavLink className="nav-link nav-link-nowrap" to={link.path} onClick={() => setOpen(false)}>
                     <span className="nav-link-label">{link.label}</span>
@@ -361,11 +397,17 @@ function Navbar({
               {renderAccountTools('mobilePanel')}
               {showCustomerTools ? (
                 <>
-                  <Link to="/wishlist" className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
+                  <Link to={ROUTE_PATHS.wishlist} className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
                     <i className="bi bi-heart me-2"></i>
                     Wishlist {wishlistCount ? `(${wishlistCount})` : ''}
                   </Link>
-                  <Link to="/cart" className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
+                  {isAuthenticated ? (
+                    <Link to={ROUTE_PATHS.messages} className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
+                      <i className="bi bi-chat-dots me-2"></i>
+                      Messages {messageUnreadCount ? `(${messageUnreadCount})` : ''}
+                    </Link>
+                  ) : null}
+                  <Link to={ROUTE_PATHS.cart} className="btn btn-slessaa btn-slessaa-outline navbar-mobile-tool-btn" onClick={closeMenu}>
                     <i className="bi bi-bag me-2"></i>
                     Cart {cartCount ? `(${cartCount})` : ''}
                   </Link>

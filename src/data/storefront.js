@@ -1460,10 +1460,12 @@ function buildProduct(product, imageUrl) {
     hoverImage: imageUrl,
     gallery: [imageUrl],
     stock: 14,
-    vendor_name: 'Slessaa Clothing',
+    vendor_name: 'slessa k',
     vendor_detail: {
-      id: 'slessaa-house',
-      brand_name: 'Slessaa Clothing'
+      id: 1,
+      user: 1,
+      slug: 'slessa-k',
+      brand_name: 'slessa k'
     }
   };
 }

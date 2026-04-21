@@ -1,7 +1,25 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+from django.utils import timezone
+
 from common.mongo import clean_document, get_collection, next_sequence, prepare_document_for_mongo, utcnow
+
+
+RETURN_WINDOW_DAYS = 14
+RETURN_ELIGIBLE_ORDER_STATUSES = {"delivered", "completed"}
+RETURN_MANAGED_STATUSES = {
+    "pending",
+    "under_review",
+    "approved_refund",
+    "approved_exchange",
+    "approved_voucher",
+    "rejected",
+    "more_info_requested",
+    "completed",
+    "cancelled",
+}
 
 
 def carts_collection():
@@ -26,6 +44,24 @@ def vouchers_collection():
 
 def _mapping_or_empty(value):
     return value if isinstance(value, dict) else {}
+
+
+def _parse_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+        try:
+            value = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    elif not isinstance(value, datetime):
+        return None
+    if timezone.is_naive(value):
+        return timezone.make_aware(value, timezone.get_current_timezone())
+    return value
 
 
 def _same_id(left, right):
@@ -84,6 +120,64 @@ def _order_matches_vendor(order, *, vendor_user_id=None, vendor_id=None):
 
 def _item_matches_vendor(item, *, vendor_user_id=None, vendor_id=None):
     return _order_matches_vendor({"items": [item], "vendor_user_ids": [item.get("vendor_user")]}, vendor_user_id=vendor_user_id, vendor_id=vendor_id)
+
+
+def _resolve_vendor_detail_from_item(item):
+    vendor_detail = clean_document(_mapping_or_empty(item.get("vendor_detail")))
+    if vendor_detail:
+        return vendor_detail
+
+    product_detail = clean_document(_mapping_or_empty(item.get("product_detail")))
+    product_vendor_detail = clean_document(_mapping_or_empty(product_detail.get("vendor_detail")))
+    if product_vendor_detail:
+        return product_vendor_detail
+
+    vendor_id = _order_item_vendor_id(item)
+    if vendor_id:
+        from apps.vendors.repository import get_vendor_by_id
+
+        vendor = get_vendor_by_id(vendor_id)
+        if vendor:
+            return clean_document(vendor)
+
+    vendor_user_id = _order_item_vendor_user(item)
+    if vendor_user_id:
+        from apps.vendors.repository import get_vendor_by_user_id
+
+        vendor = get_vendor_by_user_id(vendor_user_id)
+        if vendor:
+            return clean_document(vendor)
+
+    from apps.vendors.repository import vendors_collection
+
+    fallback_vendor = vendors_collection().find_one({"approval_status": "approved"}, sort=[("id", 1)])
+    return clean_document(fallback_vendor) if fallback_vendor else None
+
+
+def _order_return_anchor(order):
+    tracking_updates = clean_document(order.get("tracking_updates", []))
+    eligible_updates = [
+        update
+        for update in tracking_updates
+        if str(update.get("status", "")).lower() in RETURN_ELIGIBLE_ORDER_STATUSES and _parse_datetime(update.get("timestamp"))
+    ]
+    if eligible_updates:
+        latest = max(eligible_updates, key=lambda update: _parse_datetime(update.get("timestamp")))
+        return _parse_datetime(latest.get("timestamp"))
+    return _parse_datetime(order.get("created_at"))
+
+
+def _return_deadline_for_order(order):
+    anchor = _order_return_anchor(order)
+    if not anchor:
+        return None
+    return anchor + timedelta(days=RETURN_WINDOW_DAYS)
+
+
+def _is_return_window_open(order, *, now=None):
+    now = _parse_datetime(now or utcnow())
+    deadline = _return_deadline_for_order(order)
+    return bool(deadline and now <= deadline)
 
 
 def _build_cart_item(product, quantity, size="", color=""):
@@ -249,6 +343,16 @@ def _build_order_item(item_data, product=None):
     vendor_id = (vendor_detail or {}).get("id") or item_data.get("vendor")
     if vendor_id and not vendor_detail:
         vendor_detail = clean_document(get_vendor_by_id(vendor_id))
+    if not vendor_detail and item_data.get("vendor_user"):
+        from apps.vendors.repository import get_vendor_by_user_id
+
+        vendor_detail = clean_document(get_vendor_by_user_id(item_data.get("vendor_user")))
+        vendor_id = (vendor_detail or {}).get("id") or vendor_id
+    if not vendor_detail:
+        from apps.vendors.repository import vendors_collection
+
+        vendor_detail = clean_document(vendors_collection().find_one({"approval_status": "approved"}, sort=[("id", 1)]))
+        vendor_id = (vendor_detail or {}).get("id") or vendor_id
     vendor_user_id = (vendor_detail or {}).get("user") or item_data.get("vendor_user")
     vendor_name = (vendor_detail or {}).get("brand_name", "") or item_data.get("vendor_name", "")
     product_type = item_data.get("product_type") or (product_detail or {}).get("product_type") or "ready_made"
@@ -558,15 +662,21 @@ def create_return_request(user, validated_data):
     order, item = get_order_item_for_user(user, validated_data["order"], validated_data["order_item"])
     if not order or not item:
         raise ValueError("Eligible delivered order item not found.")
-    if str(order.get("status", "")).lower() not in {"delivered", "completed"}:
+    if str(order.get("status", "")).lower() not in RETURN_ELIGIBLE_ORDER_STATUSES:
         raise ValueError("Only delivered orders are eligible for returns.")
+    if not _is_return_window_open(order):
+        raise ValueError(f"Return period expired. Returns must be requested within {RETURN_WINDOW_DAYS} days of delivery.")
     existing = return_requests_collection().find_one({"order": order["id"], "order_item": item["id"], "user_id": user.id})
     if existing:
-        raise ValueError("A return request already exists for this order item.")
+        existing = clean_document(existing)
+        if str(existing.get("status", "")).lower() != "cancelled":
+            raise ValueError("A return request already exists for this order item.")
 
     requested_resolution = validated_data["requested_resolution"]
     amount = Decimal(str(item.get("price", 0) or 0)) * int(item.get("quantity", 0) or 0)
     note = f"Return request created with requested resolution: {requested_resolution.replace('_', ' ')}."
+    vendor_detail = _resolve_vendor_detail_from_item(item)
+    vendor_user_id = _order_item_vendor_user(item) or (vendor_detail or {}).get("user")
     document = {
         "id": next_sequence("return_requests"),
         "order": order["id"],
@@ -574,8 +684,8 @@ def create_return_request(user, validated_data):
         "order_item": item["id"],
         "user_id": user.id,
         "user_detail": _user_summary(user),
-        "vendor_user_id": item.get("vendor_user"),
-        "vendor_detail": clean_document(item.get("vendor_detail")) if item.get("vendor_detail") else None,
+        "vendor_user_id": vendor_user_id,
+        "vendor_detail": vendor_detail,
         "product": item.get("product"),
         "product_name": item.get("product_name") or _mapping_or_empty(item.get("product_detail")).get("name", ""),
         "product_detail": clean_document(item.get("product_detail")) if item.get("product_detail") else None,
@@ -585,6 +695,8 @@ def create_return_request(user, validated_data):
         "description": validated_data.get("description", ""),
         "image_proof": validated_data.get("image_proof", ""),
         "requested_resolution": requested_resolution,
+        "return_window_days": RETURN_WINDOW_DAYS,
+        "eligible_until": _return_deadline_for_order(order),
         "status": "pending",
         "vendor_note": "",
         "decision_resolution": "",
@@ -638,19 +750,12 @@ def update_return_request(user, return_request_id, updates):
     document = get_return_request_for_user(user, return_request_id)
     if not document:
         return None
-    allowed_statuses = {
-        "pending",
-        "under_review",
-        "approved_refund",
-        "approved_exchange",
-        "approved_voucher",
-        "rejected",
-        "more_info_requested",
-        "completed",
-    }
     next_status = updates.get("status", document.get("status"))
-    if next_status not in allowed_statuses:
+    if next_status not in RETURN_MANAGED_STATUSES:
         raise ValueError("Unsupported return request status.")
+    current_status = str(document.get("status", "")).lower()
+    if current_status == "cancelled":
+        raise ValueError("Cancelled return requests cannot be updated.")
 
     payload = {}
     if "status" in updates:
@@ -673,6 +778,26 @@ def update_return_request(user, return_request_id, updates):
         _create_voucher_for_return(updated, user)
         updated = _get_return_request_by_id(document["id"])
     return updated
+
+
+def cancel_return_request(user, return_request_id):
+    document = get_return_request_for_user(user, return_request_id)
+    if not document:
+        return None
+    if document.get("user_id") != user.id:
+        raise ValueError("Only the customer who created the return request can cancel it.")
+    if str(document.get("status", "")).lower() != "pending":
+        raise ValueError("Only pending return requests can be cancelled.")
+
+    history = clean_document(document.get("history", []))
+    history.append(_build_return_history_entry(user, "cancelled", "Customer cancelled the pending return request."))
+    payload = {
+        "status": "cancelled",
+        "updated_at": utcnow(),
+        "history": history,
+    }
+    return_requests_collection().update_one({"id": document["id"]}, {"$set": prepare_document_for_mongo(payload)})
+    return _get_return_request_by_id(document["id"])
 
 
 def list_vouchers(user):

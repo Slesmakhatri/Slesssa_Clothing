@@ -24,7 +24,7 @@ function RoleRoute({ allowedRoles, children }) {
   }
 
   if (!allowedRoles.includes(user?.role)) {
-    return <Navigate to={getDashboardPath(user)} replace />;
+    return <Navigate to="/not-authorized" replace state={{ from: location.pathname, fallback: getDashboardPath(user) }} />;
   }
 
   return children;

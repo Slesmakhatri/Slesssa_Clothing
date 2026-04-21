@@ -129,8 +129,11 @@ def _conversation_query_for_payload(payload):
         query["vendor_user_id"] = payload["vendor_user_id"]
         query["admin_user_id"] = payload["admin_user_id"]
         query["support_topic"] = payload.get("support_topic", "")
-    for key in ("product_id", "order_id", "return_request_id", "tailoring_request_id", "custom_request_id"):
-        query[key] = payload.get(key)
+    for key in ("product_id", "order_id", "return_request_id", "tailoring_request_id"):
+        if payload.get(key) is not None:
+            query[key] = payload.get(key)
+    if payload.get("custom_request_id") is not None and payload.get("tailoring_request_id") is None:
+        query["custom_request_id"] = payload.get("custom_request_id")
     return query
 
 
@@ -177,11 +180,69 @@ def _context_summary(conversation):
     return " - ".join([item for item in bits if item]) or "General conversation"
 
 
+def _conversation_identity(conversation):
+    support_topic = conversation.get("support_topic") or ""
+    return tuple(
+        [
+            conversation.get("kind"),
+            conversation.get("customer_user_id"),
+            conversation.get("vendor_user_id"),
+            conversation.get("tailor_user_id"),
+            conversation.get("admin_user_id"),
+            support_topic,
+            conversation.get("product_id"),
+            conversation.get("order_id"),
+            conversation.get("return_request_id"),
+            conversation.get("tailoring_request_id"),
+            conversation.get("custom_request_id"),
+        ]
+    )
+
+
+def _dedupe_conversations(documents):
+    seen = set()
+    unique = []
+    for document in documents:
+        if document.get("tailoring_request_id") and document.get("custom_request_id") is None:
+            document["custom_request_id"] = document.get("tailoring_request_id")
+        key = _conversation_identity(document)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(document)
+    return unique
+
+
+def _find_existing_conversation(payload):
+    return conversations_collection().find_one(
+        _conversation_query_for_payload(payload),
+        sort=[("updated_at", -1), ("id", -1)],
+    )
+
+
 def _to_int_or_none(value):
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _conversation_type_for_kind(kind):
+    return {
+        "customer_vendor": "vendor_chat",
+        "customer_tailor": "tailor_chat",
+        "vendor_admin": "vendor_admin",
+    }.get(kind, kind)
+
+
+def _kind_for_conversation_type(conversation_type):
+    return {
+        "vendor_chat": "customer_vendor",
+        "tailor_chat": "customer_tailor",
+        "customer_vendor": "customer_vendor",
+        "customer_tailor": "customer_tailor",
+        "vendor_admin": "vendor_admin",
+    }.get(conversation_type)
 
 
 def decorate_conversation_for_user(user, conversation):
@@ -199,6 +260,10 @@ def decorate_conversation_for_user(user, conversation):
     counterparty = _counterparty_for_user(user, document)
     return {
         **document,
+        "conversation_type": _conversation_type_for_kind(document.get("kind")),
+        "customer_id": document.get("customer_user_id"),
+        "admin_id": document.get("admin_user_id"),
+        "tailor_id": document.get("tailor_user_id"),
         "unread_count": _unread_count_for_user(document["id"], user.id),
         "last_message": last_message,
         "last_message_preview": (last_message or {}).get("body", ""),
@@ -212,14 +277,28 @@ def _message_document(conversation, sender, body, attachment=""):
     return {
         "id": next_sequence("chat_messages"),
         "conversation_id": conversation["id"],
+        "sender_id": sender_detail["id"],
         "sender_user_id": sender_detail["id"],
+        "sender_role": sender_detail["role"],
         "sender_detail": sender_detail,
         "body": body,
         "attachment": attachment,
+        "is_read": True,
         "read_by_user_ids": [sender_detail["id"]],
         "created_at": utcnow(),
         "deleted_for_user_ids": [],
     }
+
+
+def _decorate_message_for_user(user, message):
+    document = clean_document(message)
+    sender_user_id = document.get("sender_user_id") or document.get("sender_id")
+    read_by = document.get("read_by_user_ids") or []
+    document["sender_id"] = sender_user_id
+    document["sender_user_id"] = sender_user_id
+    document["sender_role"] = document.get("sender_role") or _mapping_or_empty(document.get("sender_detail")).get("role", "")
+    document["is_read"] = user.id in read_by
+    return document
 
 
 def _context_details(payload):
@@ -253,10 +332,22 @@ def _context_details(payload):
     }
 
 
+def _default_vendor_user_id():
+    from apps.vendors.repository import vendors_collection
+
+    vendor = clean_document(vendors_collection().find_one({"approval_status": "approved"}, sort=[("id", 1)]))
+    return vendor.get("user") if vendor else None
+
+
 def validate_conversation_start(user, payload):
     from apps.orders.repository import get_order_for_user, get_return_request_for_user
     from apps.products.repository import get_product_by_id
     from apps.tailoring.repository import get_tailoring_request_for_user
+
+    requested_kind = payload.get("kind") or _kind_for_conversation_type(payload.get("conversation_type"))
+    if requested_kind not in {"customer_vendor", "customer_tailor", "vendor_admin"}:
+        raise ValueError("A valid conversation type is required.")
+    payload = {**payload, "kind": requested_kind}
 
     if user.role not in {"customer", "tailor", "vendor", "admin", "super_admin"}:
         raise ValueError("Your account cannot start conversations.")
@@ -293,6 +384,8 @@ def validate_conversation_start(user, payload):
                 vendor_users = {item.get("vendor_user") for item in order.get("items", []) if item.get("vendor_user")}
                 if len(vendor_users) == 1:
                     vendor_user_id = next(iter(vendor_users))
+                elif not vendor_users:
+                    vendor_user_id = _default_vendor_user_id()
         if payload.get("return_request_id"):
             return_request = get_return_request_for_user(user, payload.get("return_request_id"))
             if not return_request:
@@ -300,6 +393,8 @@ def validate_conversation_start(user, payload):
             if vendor_user_id and int(vendor_user_id) != int(return_request.get("vendor_user_id") or 0):
                 raise ValueError("Return request context does not match the selected vendor.")
             vendor_user_id = vendor_user_id or return_request.get("vendor_user_id")
+        if not vendor_user_id:
+            vendor_user_id = _default_vendor_user_id()
         if not vendor_user_id:
             raise ValueError("A valid vendor context is required to start this chat.")
         validated["vendor_user_id"] = int(vendor_user_id)
@@ -399,7 +494,7 @@ def ensure_tailor_request_conversation(request_document, actor=None):
         "return_request_id": None,
         "tailoring_request_id": int(request_document["id"]),
     }
-    existing = conversations_collection().find_one(_conversation_query_for_payload(payload))
+    existing = _find_existing_conversation(payload)
     if existing:
         return clean_document(existing)
     details = _context_details(payload)
@@ -453,6 +548,10 @@ def _vendor_user_ids_for_order(order):
         vendor_user_id = _to_int_or_none(vendor_user_id)
         if vendor_user_id:
             vendor_user_ids.add(vendor_user_id)
+    if not vendor_user_ids:
+        default_vendor_user_id = _default_vendor_user_id()
+        if default_vendor_user_id:
+            vendor_user_ids.add(default_vendor_user_id)
     return sorted(vendor_user_ids)
 
 
@@ -480,7 +579,7 @@ def _ensure_vendor_order_conversations_for_user(user):
                 "return_request_id": None,
                 "tailoring_request_id": None,
             }
-            if conversations_collection().find_one(_conversation_query_for_payload(payload)):
+            if _find_existing_conversation(payload):
                 continue
             details = _context_details(payload)
             document = {
@@ -527,6 +626,7 @@ def list_conversations(user, params=None):
     kind = params.get("kind")
     if kind:
         documents = [item for item in documents if item.get("kind") == kind]
+    documents = _dedupe_conversations(documents)
     return [decorate_conversation_for_user(user, item) for item in documents]
 
 
@@ -546,7 +646,7 @@ def get_conversation_for_user(user, conversation_id):
 
 def create_or_get_conversation(user, payload):
     validated = validate_conversation_start(user, payload)
-    existing = conversations_collection().find_one(_conversation_query_for_payload(validated))
+    existing = _find_existing_conversation(validated)
     if existing:
         return decorate_conversation_for_user(user, clean_document(existing))
 
@@ -607,7 +707,11 @@ def list_messages_for_conversation(user, conversation_id):
         clean_document(item)
         for item in messages_collection().find({"conversation_id": conversation_id}, sort=[("created_at", 1), ("id", 1)])
     ]
-    return [item for item in documents if user.id not in (item.get("deleted_for_user_ids") or [])]
+    return [
+        _decorate_message_for_user(user, item)
+        for item in documents
+        if user.id not in (item.get("deleted_for_user_ids") or [])
+    ]
 
 
 def send_message(user, conversation_id, payload):
@@ -626,7 +730,7 @@ def send_message(user, conversation_id, payload):
         {"id": conversation["id"]},
         {"$set": prepare_document_for_mongo({"updated_at": utcnow(), "last_message_at": document["created_at"], "last_message_preview": document["body"][:140]})},
     )
-    return clean_document(document)
+    return _decorate_message_for_user(user, document)
 
 
 def set_conversation_closed(user, conversation_id, is_closed):

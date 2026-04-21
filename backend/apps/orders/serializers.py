@@ -138,6 +138,8 @@ class ReturnRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True)
     image_proof = serializers.CharField(required=False, allow_blank=True)
     requested_resolution = serializers.ChoiceField(choices=["full_refund", "exchange", "voucher", "manual_vendor_review"])
+    return_window_days = serializers.IntegerField(read_only=True, required=False)
+    eligible_until = serializers.DateTimeField(read_only=True, allow_null=True, required=False)
     status = serializers.ChoiceField(
         choices=[
             "pending",
@@ -148,6 +150,7 @@ class ReturnRequestSerializer(serializers.Serializer):
             "rejected",
             "more_info_requested",
             "completed",
+            "cancelled",
         ],
         required=False,
         default="pending",

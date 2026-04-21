@@ -593,26 +593,35 @@ export async function listTailoringRequests() {
 }
 
 export async function listReturnRequests() {
-  const payload = await apiRequest('/return-requests/');
+  const payload = await apiRequest('/return-requests/', { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
 export async function createReturnRequest(formData) {
   return apiRequest('/return-requests/', {
     method: 'POST',
-    body: formData
+    body: formData,
+    requiresAuth: true
   });
 }
 
 export async function updateReturnRequest(id, payload) {
   return apiRequest(`/return-requests/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    requiresAuth: true
+  });
+}
+
+export async function deleteReturnRequest(id) {
+  return apiRequest(`/return-requests/${id}/`, {
+    method: 'DELETE',
+    requiresAuth: true
   });
 }
 
 export async function listVouchers() {
-  const payload = await apiRequest('/vouchers/');
+  const payload = await apiRequest('/vouchers/', { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
@@ -659,16 +668,16 @@ export async function listChatConversations(params = {}) {
   const searchParams = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
   );
-  const payload = await apiRequest(`/chat/conversations/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, { requiresAuth: true });
+  const payload = await apiRequest(`/messages/conversations/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
 export async function getChatConversation(id) {
-  return apiRequest(`/chat/conversations/${id}/`, { requiresAuth: true });
+  return apiRequest(`/messages/conversations/${id}/`, { requiresAuth: true });
 }
 
 export async function createChatConversation(payload) {
-  return apiRequest('/chat/conversations/', {
+  return apiRequest('/messages/conversations/start/', {
     method: 'POST',
     body: JSON.stringify(payload),
     requiresAuth: true
@@ -676,12 +685,13 @@ export async function createChatConversation(payload) {
 }
 
 export async function listChatMessages(conversationId) {
-  const payload = await apiRequest(`/chat/messages/?conversation=${conversationId}`, { requiresAuth: true });
+  const payload = await apiRequest(`/messages/conversations/${conversationId}/messages/`, { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
 export async function sendChatMessage(payload) {
-  return apiRequest('/chat/messages/', {
+  const conversationId = payload instanceof FormData ? payload.get('conversation') : payload.conversation;
+  return apiRequest(`/messages/conversations/${conversationId}/messages/`, {
     method: 'POST',
     body: payload instanceof FormData ? payload : JSON.stringify(payload),
     requiresAuth: true
@@ -689,19 +699,26 @@ export async function sendChatMessage(payload) {
 }
 
 export async function markChatConversationRead(id) {
-  return apiRequest(`/chat/conversations/${id}/read/`, {
+  return apiRequest(`/messages/conversations/${id}/read/`, {
     method: 'POST',
     requiresAuth: true
   });
 }
 
 export async function setChatConversationClosed(id, isClosed = true) {
-  return apiRequest(`/chat/conversations/${id}/close/`, {
+  return apiRequest(`/messages/conversations/${id}/close/`, {
     method: 'POST',
     body: JSON.stringify({ is_closed: isClosed }),
     requiresAuth: true
   });
 }
+
+export const listMessageConversations = listChatConversations;
+export const getMessageConversation = getChatConversation;
+export const startMessageConversation = createChatConversation;
+export const listConversationMessages = listChatMessages;
+export const sendConversationMessage = sendChatMessage;
+export const markMessageConversationRead = markChatConversationRead;
 
 export async function listTailorProfiles(params = {}) {
   const searchParams = new URLSearchParams(

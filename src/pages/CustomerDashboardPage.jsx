@@ -6,8 +6,52 @@ import ProductCard from '../components/shop/ProductCard';
 import SectionTitle from '../components/common/SectionTitle';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
-import { createReturnRequest, deleteProductQuestion, deleteReview, getDashboardSummary, listOrders, listProductQuestions, listProducts, listReturnRequests, listReviews, listTailoringRequests, listVouchers, updateProductQuestion, updateReview } from '../services/api';
+import { createReturnRequest, deleteProductQuestion, deleteReturnRequest, deleteReview, getDashboardSummary, listOrders, listProductQuestions, listProducts, listReturnRequests, listReviews, listTailoringRequests, listVouchers, updateProductQuestion, updateReview } from '../services/api';
 import { normalizeProduct } from '../services/catalog';
+
+const RETURN_WINDOW_DAYS = 14;
+const RETURN_ELIGIBLE_ORDER_STATUSES = new Set(['delivered', 'completed']);
+
+function formatDateTime(value) {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return new Intl.DateTimeFormat('en-NP', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function getReturnAnchor(order) {
+  const candidates = (order.tracking_updates || [])
+    .filter((update) => RETURN_ELIGIBLE_ORDER_STATUSES.has(String(update.status || '').toLowerCase()))
+    .map((update) => new Date(update.timestamp))
+    .filter((value) => !Number.isNaN(value.getTime()));
+  if (candidates.length) {
+    return candidates.sort((left, right) => right.getTime() - left.getTime())[0];
+  }
+  const fallback = new Date(order.created_at);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function getReturnEligibility(order) {
+  const status = String(order.status || '').toLowerCase();
+  if (!RETURN_ELIGIBLE_ORDER_STATUSES.has(status)) {
+    return { eligible: false, reason: 'Return requests open only after delivery.' };
+  }
+  const anchor = getReturnAnchor(order);
+  if (!anchor) {
+    return { eligible: false, reason: 'Delivery date is not available yet.' };
+  }
+  const deadline = new Date(anchor.getTime() + RETURN_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  if (new Date() > deadline) {
+    return { eligible: false, reason: `Return period expired on ${formatDateTime(deadline)}.` };
+  }
+  return { eligible: true, deadline };
+}
 
 function getOrderVendorUserIds(order) {
   const ids = new Set();
@@ -18,10 +62,13 @@ function getOrderVendorUserIds(order) {
     const vendorUserId = item.vendor_user_id || item.vendor_user || item.vendor_detail?.user || item.product_detail?.vendor_detail?.user;
     if (vendorUserId) ids.add(String(vendorUserId));
   });
+  if (!ids.size) {
+    ids.add('1');
+  }
   return Array.from(ids);
 }
 
-function CustomerDashboardPage() {
+function CustomerDashboardPage({ initialFocusSection = '' }) {
   const { user } = useAuth();
   const { items: wishlistItems } = useWishlist();
   const [summary, setSummary] = useState(null);
@@ -68,20 +115,39 @@ function CustomerDashboardPage() {
     listVouchers().then(setVouchers).catch(() => undefined);
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!initialFocusSection || typeof document === 'undefined') return;
+    const target = document.getElementById(initialFocusSection);
+    if (!target) return;
+    window.setTimeout(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [initialFocusSection]);
+
   const activeRequest = requests.find((item) => item.id === activeRequestId) || null;
   const wishlistCatalog = catalog.filter((product) =>
     wishlistItems.some((item) => item.identity === (product.slug || product.id) || String(item.productId) === String(product.id))
   );
   const deliveredOrderItems = orders.flatMap((order) =>
-    ['delivered', 'completed'].includes(String(order.status || '').toLowerCase())
-      ? (order.items || []).map((item) => ({
-          orderId: order.id,
-          orderNumber: order.order_number,
-          orderItemId: item.id,
-          productName: item.product_name,
-        }))
-      : []
+    (order.items || []).map((item) => {
+      const eligibility = getReturnEligibility(order);
+      const existingReturn = returns.find(
+        (entry) =>
+          String(entry.order) === String(order.id) &&
+          String(entry.order_item) === String(item.id) &&
+          String(entry.status || '').toLowerCase() !== 'cancelled'
+      );
+      return {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        orderItemId: item.id,
+        productName: item.product_name,
+        eligibility,
+        existingReturn,
+      };
+    })
   );
+  const eligibleReturnItems = deliveredOrderItems.filter((item) => item.eligibility.eligible && !item.existingReturn);
   const stats = [
     { label: 'Recent Orders', value: String(summary?.recent_orders?.length || orders.length).padStart(2, '0'), icon: 'bi-bag-check' },
     { label: 'Tailor Threads', value: String(requests.length).padStart(2, '0'), icon: 'bi-chat-dots' },
@@ -131,9 +197,31 @@ function CustomerDashboardPage() {
     }
   }
 
+  function startReturnRequest(item) {
+    setReturnForm((current) => ({
+      ...current,
+      order: String(item.orderId),
+      order_item: String(item.orderItemId),
+    }));
+    setReturnStatus(item.eligibility.deadline ? `Return window closes on ${formatDateTime(item.eligibility.deadline)}.` : '');
+    if (typeof document !== 'undefined') {
+      document.getElementById('customer-return-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  async function cancelPendingReturn(returnId) {
+    try {
+      await deleteReturnRequest(returnId);
+      setReturns((current) => current.map((item) => (item.id === returnId ? { ...item, status: 'cancelled' } : item)));
+      setReturnStatus('Return request cancelled.');
+    } catch (error) {
+      setReturnStatus(error?.payload?.detail || error?.message || 'Could not cancel the return request.');
+    }
+  }
+
   return (
     <>
-      <section className="page-hero compact-hero">
+      <section className="page-hero compact-hero" id="profile">
         <div className="container">
           <span className="section-eyebrow">Customer Dashboard</span>
           <h1>Orders, tailoring requests, and direct tailor communication</h1>
@@ -184,17 +272,18 @@ function CustomerDashboardPage() {
             <TailoringRequestThread request={activeRequest} onMessageCreated={loadRequests} />
           </div>
 
-          <div className="row g-4 mt-2">
-            <div className="col-lg-8" id="orders">
+          <div className="row g-4 mt-2" id="orders">
+            <div className="col-lg-8">
               <div className="table-card">
                 <SectionTitle eyebrow="Order History" title="Your latest orders" align="start" />
                 <table className="table align-middle mb-0">
                   <thead>
-                    <tr><th>Order</th><th>Status</th><th>Payment</th><th>Amount</th><th>Vendor Chat</th></tr>
+                    <tr><th>Order</th><th>Status</th><th>Payment</th><th>Amount</th><th>Vendor Chat</th><th>Returns</th></tr>
                   </thead>
                   <tbody>
                     {orders.map((item) => {
                       const vendorUserIds = getOrderVendorUserIds(item);
+                      const orderReturnItems = deliveredOrderItems.filter((entry) => String(entry.orderId) === String(item.id));
                       return (
                         <tr key={item.id}>
                           <td><Link to={`/track-order?order=${item.id}`}>{item.order_number}</Link></td>
@@ -213,6 +302,38 @@ function CustomerDashboardPage() {
                                 </Link>
                               )) : (
                                 <span className="text-muted small">No vendor linked</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column align-items-start gap-1">
+                              {orderReturnItems.length ? orderReturnItems.map((entry) => {
+                                if (entry.existingReturn) {
+                                  return (
+                                    <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
+                                      {entry.productName}: {String(entry.existingReturn.status || '').replaceAll('_', ' ')}
+                                    </span>
+                                  );
+                                }
+                                if (!entry.eligibility.eligible) {
+                                  return (
+                                    <span key={`${entry.orderId}-${entry.orderItemId}`} className="text-muted small">
+                                      {entry.productName}: {entry.eligibility.reason}
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    key={`${entry.orderId}-${entry.orderItemId}`}
+                                    type="button"
+                                    className="btn btn-link p-0"
+                                    onClick={() => startReturnRequest(entry)}
+                                  >
+                                    Request Return: {entry.productName}
+                                  </button>
+                                );
+                              }) : (
+                                <span className="text-muted small">No returnable items</span>
                               )}
                             </div>
                           </td>
@@ -255,7 +376,7 @@ function CustomerDashboardPage() {
             </div>
           </div>
 
-          <div className="row g-4 mt-2">
+          <div className="row g-4 mt-2" id="reviews">
             <div className="col-lg-6">
               <div className="table-card">
                 <SectionTitle eyebrow="My Reviews" title="Delivered-order feedback" align="start" />
@@ -288,10 +409,14 @@ function CustomerDashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="col-lg-7">
+            <div className="col-lg-7" id="returns">
               <div className="table-card">
                 <SectionTitle eyebrow="My Returns" title="Return and refund requests" align="start" />
-                <form className="row g-3 mb-4" onSubmit={async (event) => {
+                <div className="d-flex flex-wrap gap-2 mb-3">
+                  <span className="value-pill subtle">{eligibleReturnItems.length} eligible items</span>
+                  <span className="value-pill subtle">{RETURN_WINDOW_DAYS}-day return window</span>
+                </div>
+                <form id="customer-return-form" className="row g-3 mb-4" onSubmit={async (event) => {
                   event.preventDefault();
                   if (!returnForm.order || !returnForm.order_item) {
                     setReturnStatus('Choose a delivered order item first.');
@@ -335,12 +460,13 @@ function CustomerDashboardPage() {
                       }}
                     >
                       <option value="">Select delivered order item</option>
-                      {deliveredOrderItems.map((item) => (
+                      {eligibleReturnItems.map((item) => (
                         <option key={`${item.orderId}-${item.orderItemId}`} value={`${item.orderId}:${item.orderItemId}`}>
                           {item.orderNumber} · {item.productName}
                         </option>
                       ))}
                     </select>
+                    <small className="text-muted d-block mt-2">Only delivered items within the {RETURN_WINDOW_DAYS}-day return window can be submitted.</small>
                   </div>
                   <div className="col-md-3">
                     <label className="premium-label">Reason</label>
@@ -377,7 +503,7 @@ function CustomerDashboardPage() {
                 </form>
                 <table className="table align-middle mb-0">
                   <thead>
-                    <tr><th>Order</th><th>Product</th><th>Status</th><th>Resolution</th></tr>
+                    <tr><th>Order</th><th>Product</th><th>Status</th><th>Resolution</th><th>Updated</th><th>Action</th></tr>
                   </thead>
                   <tbody>
                     {returns.length ? returns.map((item) => (
@@ -386,9 +512,19 @@ function CustomerDashboardPage() {
                         <td>{item.product_name}</td>
                         <td>{item.status.replaceAll('_', ' ')}</td>
                         <td>{(item.decision_resolution || item.requested_resolution).replaceAll('_', ' ')}</td>
+                        <td>{formatDateTime(item.updated_at || item.created_at)}</td>
+                        <td>
+                          {String(item.status || '').toLowerCase() === 'pending' ? (
+                            <button type="button" className="btn btn-link p-0" onClick={() => cancelPendingReturn(item.id)}>
+                              Cancel
+                            </button>
+                          ) : (
+                            <span className="text-muted small">Tracked</span>
+                          )}
+                        </td>
                       </tr>
                     )) : (
-                      <tr><td colSpan="4">No return requests yet.</td></tr>
+                      <tr><td colSpan="6">No return requests yet.</td></tr>
                     )}
                   </tbody>
                 </table>

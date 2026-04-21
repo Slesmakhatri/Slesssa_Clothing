@@ -17,6 +17,7 @@ import {
   listVendorApplications,
   listVendors,
   updateProductQuestion,
+  updateReturnRequest,
   updateReview,
   updateSupportMessage,
   updateVendorApplication
@@ -35,6 +36,7 @@ function AdminDashboardPage() {
   const [supportMessages, setSupportMessages] = useState([]);
   const [tailoringRequests, setTailoringRequests] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
+  const [returnDrafts, setReturnDrafts] = useState({});
 
   useEffect(() => {
     getDashboardSummary('admin').then(setSummary).catch(() => undefined);
@@ -44,7 +46,10 @@ function AdminDashboardPage() {
     listOrders().then(setOrders).catch(() => undefined);
     listReviews({ include_hidden: 1 }).then(setReviews).catch(() => undefined);
     listProductQuestions().then(setQuestions).catch(() => undefined);
-    listReturnRequests().then(setReturns).catch(() => undefined);
+    listReturnRequests().then((items) => {
+      setReturns(items);
+      setReturnDrafts(Object.fromEntries(items.map((item) => [item.id, item.status || 'pending'])));
+    }).catch(() => undefined);
     listVendorApplications().then(setVendorApplications).catch(() => undefined);
     listSupportMessages().then(setSupportMessages).catch(() => undefined);
     listTailoringRequests().then(setTailoringRequests).catch(() => undefined);
@@ -97,6 +102,16 @@ function AdminDashboardPage() {
       setStatusMessage(`Question marked as ${nextStatus}.`);
     } catch (error) {
       setStatusMessage(error?.payload?.detail || 'Could not update question status.');
+    }
+  }
+
+  async function moderateReturn(id) {
+    try {
+      const updated = await updateReturnRequest(id, { status: returnDrafts[id] || 'under_review' });
+      setReturns((current) => current.map((item) => (item.id === id ? updated : item)));
+      setStatusMessage(`Return request updated to ${String(updated.status || '').replaceAll('_', ' ')}.`);
+    } catch (error) {
+      setStatusMessage(error?.payload?.detail || 'Could not update return request.');
     }
   }
 
@@ -323,7 +338,7 @@ function AdminDashboardPage() {
                 <SectionTitle eyebrow="Return Cases" title="Manual review cases" align="start" />
                 <table className="table align-middle mb-0">
                   <thead>
-                    <tr><th>Order</th><th>Product</th><th>Status</th></tr>
+                    <tr><th>Order</th><th>Product</th><th>Status</th><th>Decision</th></tr>
                   </thead>
                   <tbody>
                     {returns.slice(0, 8).map((item) => (
@@ -331,6 +346,27 @@ function AdminDashboardPage() {
                         <td>{item.order_number}</td>
                         <td>{item.product_name}</td>
                         <td>{item.status.replaceAll('_', ' ')}</td>
+                        <td>
+                          <div className="d-flex flex-column align-items-start gap-2">
+                            <select
+                              className="form-select form-select-sm"
+                              value={returnDrafts[item.id] || item.status}
+                              onChange={(event) => setReturnDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="under_review">Under Review</option>
+                              <option value="approved_refund">Approve Refund</option>
+                              <option value="approved_exchange">Approve Exchange</option>
+                              <option value="approved_voucher">Approve Voucher</option>
+                              <option value="more_info_requested">Need More Info</option>
+                              <option value="rejected">Reject</option>
+                              <option value="completed">Completed</option>
+                            </select>
+                            <button type="button" className="btn btn-link p-0" onClick={() => moderateReturn(item.id)}>
+                              Save
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

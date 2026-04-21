@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import OrderProgress from '../components/tracking/OrderProgress';
 import { getOrder } from '../services/api';
 
 function TrackingPage() {
   const location = useLocation();
+  const { orderId: routeOrderId } = useParams();
   const [order, setOrder] = useState(location.state?.order || null);
-  const orderId = new URLSearchParams(location.search).get('order');
+  const orderId = routeOrderId || new URLSearchParams(location.search).get('order');
 
   useEffect(() => {
     if (order || !orderId) return;

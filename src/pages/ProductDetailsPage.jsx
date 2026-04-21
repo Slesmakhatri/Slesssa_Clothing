@@ -10,7 +10,7 @@ import { storefrontProducts } from '../data/storefront';
 import { createProductQuestion, createReview, getProduct, getRecommendations, listOrders, listProductQuestions, listProducts, listReviews } from '../services/api';
 import RecommendationSections from '../components/common/RecommendationSections';
 import { getRelatedProducts, normalizeProduct } from '../services/catalog';
-import { getCategoryFallbackImage, getProductGallery, getProductOldPrice, getProductPrice, getProductType, getVendorId, isCustomizableProduct, isReadyMadeProduct } from '../services/productUtils';
+import { getCategoryFallbackImage, getProductGallery, getProductOldPrice, getProductPrice, getProductType, getVendorId, getVendorUserId, isCustomizableProduct, isReadyMadeProduct } from '../services/productUtils';
 import { getRecentViewedProductIds, recordRecentProductView } from '../services/recentViews';
 import { getSustainabilityGuidanceForProduct, getSustainableAlternatives } from '../services/sustainability';
 
@@ -171,7 +171,7 @@ function ProductDetailsPage() {
   const productType = getProductType(product);
   const canAddToCart = isReadyMadeProduct(product);
   const canCustomize = isCustomizableProduct(product);
-  const vendorUserId = product.vendor_detail?.user || null;
+  const vendorUserId = getVendorUserId(product);
   const vendorId = getVendorId(product);
 
   async function handleBuyNow() {
@@ -382,7 +382,7 @@ function ProductDetailsPage() {
                   to={isAuthenticated ? `/messages?kind=customer_vendor&vendor_user_id=${vendorUserId}&product_id=${product.id}` : '/login'}
                   className="btn btn-slessaa btn-slessaa-outline"
                 >
-                  Chat with Vendor
+                  Message Vendor
                 </Link>
               ) : null}
               {vendorUserId ? (

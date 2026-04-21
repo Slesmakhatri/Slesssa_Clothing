@@ -4,7 +4,11 @@ from rest_framework import serializers
 class ChatConversationSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     kind = serializers.ChoiceField(choices=["customer_vendor", "customer_tailor", "vendor_admin"])
+    conversation_type = serializers.ChoiceField(choices=["vendor_chat", "tailor_chat", "vendor_admin"], read_only=True)
     participant_user_ids = serializers.ListField(child=serializers.IntegerField(), read_only=True)
+    customer_id = serializers.IntegerField(read_only=True, allow_null=True)
+    admin_id = serializers.IntegerField(read_only=True, allow_null=True)
+    tailor_id = serializers.IntegerField(read_only=True, allow_null=True)
     customer_user_id = serializers.IntegerField(read_only=True, allow_null=True)
     customer_detail = serializers.JSONField(read_only=True, allow_null=True)
     vendor_user_id = serializers.IntegerField(read_only=True, allow_null=True)
@@ -37,7 +41,8 @@ class ChatConversationSerializer(serializers.Serializer):
 
 
 class ChatConversationCreateSerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=["customer_vendor", "customer_tailor", "vendor_admin"])
+    kind = serializers.ChoiceField(choices=["customer_vendor", "customer_tailor", "vendor_admin"], required=False)
+    conversation_type = serializers.ChoiceField(choices=["vendor_chat", "tailor_chat", "vendor_admin"], required=False)
     vendor_user_id = serializers.IntegerField(required=False, allow_null=True)
     admin_user_id = serializers.IntegerField(required=False, allow_null=True)
     product_id = serializers.IntegerField(required=False, allow_null=True)
@@ -48,14 +53,29 @@ class ChatConversationCreateSerializer(serializers.Serializer):
     subject = serializers.CharField(required=False, allow_blank=True)
     support_topic = serializers.CharField(required=False, allow_blank=True)
 
+    def validate(self, attrs):
+        kind_by_type = {
+            "vendor_chat": "customer_vendor",
+            "tailor_chat": "customer_tailor",
+            "vendor_admin": "vendor_admin",
+        }
+        kind = attrs.get("kind") or kind_by_type.get(attrs.get("conversation_type"))
+        if not kind:
+            raise serializers.ValidationError({"conversation_type": "This field is required."})
+        attrs["kind"] = kind
+        return attrs
+
 
 class ChatMessageSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     conversation_id = serializers.IntegerField(read_only=True)
+    sender_id = serializers.IntegerField(read_only=True)
     sender_user_id = serializers.IntegerField(read_only=True)
+    sender_role = serializers.CharField(read_only=True, allow_blank=True)
     sender_detail = serializers.JSONField(read_only=True)
     body = serializers.CharField()
     attachment = serializers.CharField(read_only=True, allow_blank=True)
+    is_read = serializers.BooleanField(read_only=True)
     read_by_user_ids = serializers.ListField(child=serializers.IntegerField(), read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
