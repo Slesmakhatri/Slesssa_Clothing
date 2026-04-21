@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
+import logging
 
 from django.utils import timezone
 
@@ -20,6 +21,8 @@ RETURN_MANAGED_STATUSES = {
     "completed",
     "cancelled",
 }
+
+logger = logging.getLogger(__name__)
 
 
 def carts_collection():
@@ -152,6 +155,97 @@ def _resolve_vendor_detail_from_item(item):
 
     fallback_vendor = vendors_collection().find_one({"approval_status": "approved"}, sort=[("id", 1)])
     return clean_document(fallback_vendor) if fallback_vendor else None
+
+
+def _repair_order_vendor_links(order, *, persist=False):
+    document = clean_document(order) or {}
+    if not document:
+        return document
+
+    changed = False
+    repaired_items = []
+    vendor_user_ids = set()
+    vendor_ids = set()
+
+    for raw_item in document.get("items", []) or []:
+        item = clean_document(raw_item) or {}
+        next_item = {**item}
+        vendor_detail = clean_document(_mapping_or_empty(next_item.get("vendor_detail")))
+        if not vendor_detail:
+            vendor_detail = _resolve_vendor_detail_from_item(next_item)
+        if vendor_detail:
+            vendor_id = next_item.get("vendor") or vendor_detail.get("id")
+            vendor_user_id = next_item.get("vendor_user") or vendor_detail.get("user")
+            vendor_name = next_item.get("vendor_name") or vendor_detail.get("brand_name", "")
+
+            if next_item.get("vendor") != vendor_id or next_item.get("vendor_id") != vendor_id:
+                next_item["vendor"] = vendor_id
+                next_item["vendor_id"] = vendor_id
+                changed = True
+            if next_item.get("vendor_user") != vendor_user_id or next_item.get("vendor_user_id") != vendor_user_id:
+                next_item["vendor_user"] = vendor_user_id
+                next_item["vendor_user_id"] = vendor_user_id
+                changed = True
+            if next_item.get("vendor_name") != vendor_name:
+                next_item["vendor_name"] = vendor_name
+                changed = True
+            if clean_document(_mapping_or_empty(next_item.get("vendor_detail"))) != vendor_detail:
+                next_item["vendor_detail"] = vendor_detail
+                changed = True
+
+        product_detail = clean_document(_mapping_or_empty(next_item.get("product_detail")))
+        if product_detail and vendor_detail and clean_document(_mapping_or_empty(product_detail.get("vendor_detail"))) != vendor_detail:
+            product_detail["vendor_detail"] = vendor_detail
+            product_detail["vendor"] = product_detail.get("vendor") or vendor_detail.get("id")
+            product_detail["vendor_name"] = product_detail.get("vendor_name") or vendor_detail.get("brand_name", "")
+            next_item["product_detail"] = product_detail
+            changed = True
+
+        if next_item.get("vendor_user"):
+            vendor_user_ids.add(next_item["vendor_user"])
+        if next_item.get("vendor"):
+            vendor_ids.add(next_item["vendor"])
+        repaired_items.append(next_item)
+
+    next_vendor_user_ids = sorted(vendor_user_ids)
+    next_vendor_ids = sorted(vendor_ids)
+    next_vendor_id = next_vendor_ids[0] if len(next_vendor_ids) == 1 else None
+
+    if repaired_items != (document.get("items") or []):
+        document["items"] = repaired_items
+        changed = True
+    if next_vendor_user_ids != sorted(document.get("vendor_user_ids") or []):
+        document["vendor_user_ids"] = next_vendor_user_ids
+        changed = True
+    if next_vendor_ids != sorted(document.get("vendor_ids") or []):
+        document["vendor_ids"] = next_vendor_ids
+        changed = True
+    if document.get("vendor_id") != next_vendor_id:
+        document["vendor_id"] = next_vendor_id
+        changed = True
+
+    if changed and persist and document.get("id") is not None:
+        orders_collection().update_one(
+            {"id": int(document["id"])},
+            {
+                "$set": prepare_document_for_mongo(
+                    {
+                        "items": document["items"],
+                        "vendor_user_ids": document.get("vendor_user_ids", []),
+                        "vendor_ids": document.get("vendor_ids", []),
+                        "vendor_id": document.get("vendor_id"),
+                    }
+                )
+            },
+        )
+        logger.debug(
+            "Repaired vendor linkage for order %s: vendor_user_ids=%s vendor_ids=%s",
+            document.get("order_number") or document.get("id"),
+            document.get("vendor_user_ids", []),
+            document.get("vendor_ids", []),
+        )
+
+    return document
 
 
 def _order_return_anchor(order):
@@ -415,6 +509,14 @@ def create_order(user, validated_data):
     for item in items_data:
         _validate_order_item_payload(item)
         product = get_product_by_id(item.get("product")) if item.get("product") else None
+        logger.debug(
+            "Checkout order item mapping: product=%s product_name=%s vendor=%s vendor_user=%s resolved_product_vendor=%s",
+            item.get("product"),
+            item.get("product_name"),
+            item.get("vendor"),
+            item.get("vendor_user"),
+            _mapping_or_empty((product or {}).get("vendor_detail")).get("user") if product else None,
+        )
         order_item = _build_order_item(item, product=product)
         subtotal += Decimal(str(order_item["price"])) * int(order_item["quantity"])
         if order_item.get("vendor_user"):
@@ -466,7 +568,14 @@ def create_order(user, validated_data):
     }
     mongo_document = prepare_document_for_mongo(document)
     orders_collection().insert_one(mongo_document)
-    created = clean_document(mongo_document)
+    created = _repair_order_vendor_links(clean_document(mongo_document), persist=True)
+    logger.debug(
+        "Created order %s for customer=%s vendor_user_ids=%s vendor_ids=%s",
+        created.get("order_number"),
+        created.get("user_id"),
+        created.get("vendor_user_ids", []),
+        created.get("vendor_ids", []),
+    )
     _create_order_notification(
         created,
         event_key="order_placed",
@@ -478,7 +587,7 @@ def create_order(user, validated_data):
 
 
 def list_orders(user):
-    documents = [clean_document(document) for document in orders_collection().find({})]
+    documents = [_repair_order_vendor_links(clean_document(document), persist=True) for document in orders_collection().find({})]
     if user.role in {"admin", "super_admin"}:
         return documents
     if user.role == "vendor":
@@ -486,7 +595,14 @@ def list_orders(user):
 
         vendor = get_vendor_by_user_id(user.id)
         vendor_id = vendor.get("id") if vendor else None
-        return [document for document in documents if _order_matches_vendor(document, vendor_user_id=user.id, vendor_id=vendor_id)]
+        matched = [document for document in documents if _order_matches_vendor(document, vendor_user_id=user.id, vendor_id=vendor_id)]
+        logger.debug(
+            "Vendor order query user_id=%s vendor_id=%s matched_orders=%s",
+            user.id,
+            vendor_id,
+            [order.get("order_number") for order in matched],
+        )
+        return matched
     return [document for document in documents if document.get("user_id") == user.id]
 
 
@@ -495,7 +611,8 @@ def get_order_by_id(order_id):
         order_id = int(order_id)
     except (TypeError, ValueError):
         return None
-    return orders_collection().find_one({"id": order_id})
+    order = orders_collection().find_one({"id": order_id})
+    return _repair_order_vendor_links(order, persist=True) if order else None
 
 
 def get_order_for_user(user, order_id):
