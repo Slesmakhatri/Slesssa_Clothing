@@ -923,8 +923,12 @@ function VendorDashboardWorkspace({
             <div className="table-card">
               <VendorSectionHeader title="Orders" description="Only vendor-routed orders are shown here. Update fulfillment status as work progresses." />
               {orders.length ? (
-                <div className="vendor-order-stack">
-                  {orders.map((order) => (
+                <PaginatedCardList
+                  items={orders}
+                  itemLabel="orders"
+                  initialPageSize={5}
+                  className="vendor-order-stack"
+                  renderItem={(order) => (
                     <article key={order.id} className="vendor-order-card">
                       <div className="vendor-order-card__header">
                         <div>
@@ -957,8 +961,8 @@ function VendorDashboardWorkspace({
                         </button>
                       </div>
                     </article>
-                  ))}
-                </div>
+                  )}
+                />
               ) : (
                 <div className="empty-state-sm">No vendor orders yet.</div>
               )}
