@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import ProductCard from '../shop/ProductCard';
 
 const productGridColumnClass = 'col-xl-3 col-lg-4 col-md-6 col-sm-6 col-12 d-flex';
-const skeletonCards = Array.from({ length: 4 }, (_, index) => index);
 
 function mergeProducts(products = [], fallbackProducts = [], limit = 4) {
   const seen = new Set();
@@ -30,9 +29,11 @@ function ProductSection({
   emptyText = 'Products will appear here when the catalog is ready.',
   action,
   onQuickView,
+  limit = 4,
   className = ''
 }) {
-  const items = mergeProducts(products, fallbackProducts, 4);
+  const items = mergeProducts(products, fallbackProducts, limit);
+  const skeletonCards = Array.from({ length: limit }, (_, index) => index);
 
   return (
     <section className={`section-space homepage-section product-section ${className}`}>
