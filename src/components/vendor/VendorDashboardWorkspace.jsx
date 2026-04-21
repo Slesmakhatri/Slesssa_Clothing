@@ -154,6 +154,7 @@ function VendorDashboardWorkspace({
   });
   const [customizationForm, setCustomizationForm] = useState(DEFAULT_CUSTOMIZATION);
   const [productForm, setProductForm] = useState(DEFAULT_PRODUCT_FORM);
+  const [productErrors, setProductErrors] = useState({});
   const [editingProductSlug, setEditingProductSlug] = useState('');
   const [savingSection, setSavingSection] = useState('');
   const [orderDrafts, setOrderDrafts] = useState({});
@@ -409,34 +410,68 @@ function VendorDashboardWorkspace({
       return;
     }
     setSavingSection('product');
+    setProductErrors({});
     try {
-      const formData = new FormData();
-      formData.append('vendor', vendorProfile.id);
-      formData.append('name', productForm.name);
-      formData.append('price', productForm.price || 0);
-      formData.append('stock', productForm.stock || 0);
-      formData.append('category', productForm.category);
-      formData.append('description', productForm.description);
-      formData.append('sustainability_guidance', productForm.sustainability_guidance);
-      formData.append('product_type', productForm.product_type);
-      formData.append('is_customizable', String(productForm.is_customizable));
-      formData.append('is_active', String(productForm.is_active));
-      formData.append('sizes', JSON.stringify(splitCsv(productForm.sizes)));
-      formData.append('colors', JSON.stringify(splitCsv(productForm.colors)));
-      formData.append('fabric_options', JSON.stringify(splitCsv(productForm.fabric_options)));
-      if (productForm.is_customizable || productForm.product_type !== 'ready_made') {
-        formData.append('customization_note', productForm.customization_note);
-      }
-      if (productForm.main_image) {
-        formData.append('main_image', productForm.main_image);
+      // Build a typed payload first
+      const payload = {
+        vendor: Number(vendorProfile.id),
+        name: String(productForm.name || ''),
+        price: Number(productForm.price || 0),
+        stock: parseInt(productForm.stock || 0, 10) || 0,
+        category: productForm.category ? Number(productForm.category) : null,
+        description: String(productForm.description || ''),
+        sustainability_guidance: String(productForm.sustainability_guidance || ''),
+        product_type: String(productForm.product_type || 'ready_made'),
+        is_customizable: Boolean(productForm.is_customizable),
+        is_active: Boolean(productForm.is_active),
+        sizes: splitCsv(productForm.sizes),
+        colors: splitCsv(productForm.colors),
+        fabric_options: splitCsv(productForm.fabric_options)
+      };
+      if (productForm.customization_note) payload.customization_note = String(productForm.customization_note);
+
+      if (import.meta.env.DEV) {
+        console.debug('Raw productForm:', productForm);
+        console.debug('Transformed product payload:', payload);
       }
 
-      if (editingProductSlug) {
-        await updateProduct(editingProductSlug, formData);
-        pushNotice('Product updated.');
+      // If there's a file to upload, use FormData and append types carefully
+      if (productForm.main_image) {
+        const formData = new FormData();
+        // primitives
+        formData.append('vendor', String(payload.vendor));
+        formData.append('name', payload.name);
+        formData.append('price', String(payload.price));
+        formData.append('stock', String(payload.stock));
+        if (payload.category !== null) formData.append('category', String(payload.category));
+        formData.append('description', payload.description);
+        formData.append('sustainability_guidance', payload.sustainability_guidance);
+        formData.append('product_type', payload.product_type);
+        formData.append('is_customizable', payload.is_customizable ? 'true' : 'false');
+        formData.append('is_active', payload.is_active ? 'true' : 'false');
+        if (payload.customization_note) formData.append('customization_note', payload.customization_note);
+        // arrays: append repeated keys so DRF can parse them as lists
+        (payload.sizes || []).forEach((s) => formData.append('sizes', s));
+        (payload.colors || []).forEach((c) => formData.append('colors', c));
+        (payload.fabric_options || []).forEach((f) => formData.append('fabric_options', f));
+        formData.append('main_image', productForm.main_image);
+
+        if (editingProductSlug) {
+          await updateProduct(editingProductSlug, formData);
+          pushNotice('Product updated.');
+        } else {
+          await createProduct(formData);
+          pushNotice('Product created.');
+        }
       } else {
-        await createProduct(formData);
-        pushNotice('Product created.');
+        // send JSON payload (no file)
+        if (editingProductSlug) {
+          await updateProduct(editingProductSlug, payload);
+          pushNotice('Product updated.');
+        } else {
+          await createProduct(payload);
+          pushNotice('Product created.');
+        }
       }
 
       resetProductForm();
@@ -803,6 +838,7 @@ function VendorDashboardWorkspace({
                 <label>
                   Product Name
                   <input value={productForm.name} onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))} required />
+                  {productErrors.name ? <div className="vendor-help text-danger">{(productErrors.name || []).join(' ')}</div> : null}
                 </label>
                 <label>
                   Category
@@ -822,15 +858,18 @@ function VendorDashboardWorkspace({
                       })
                     )}
                   </select>
+                  {productErrors.category ? <div className="vendor-help text-danger">{(productErrors.category || []).join(' ')}</div> : null}
                   {categories.length === 0 ? <div className="vendor-help text-muted">No categories available. Please ask admin to create categories first.</div> : null}
                 </label>
                 <label>
                   Price
                   <input type="number" min="0" step="0.01" value={productForm.price} onChange={(event) => setProductForm((current) => ({ ...current, price: event.target.value }))} required />
+                  {productErrors.price ? <div className="vendor-help text-danger">{(productErrors.price || []).join(' ')}</div> : null}
                 </label>
                 <label>
                   Stock
                   <input type="number" min="0" step="1" value={productForm.stock} onChange={(event) => setProductForm((current) => ({ ...current, stock: event.target.value }))} required />
+                  {productErrors.stock ? <div className="vendor-help text-danger">{(productErrors.stock || []).join(' ')}</div> : null}
                 </label>
                 <label>
                   Product Type
@@ -839,6 +878,7 @@ function VendorDashboardWorkspace({
                     <option value="customizable">Customizable</option>
                     <option value="both">Both</option>
                   </select>
+                  {productErrors.product_type ? <div className="vendor-help text-danger">{(productErrors.product_type || []).join(' ')}</div> : null}
                 </label>
                 <label className="vendor-checkbox-field">
                   <input type="checkbox" checked={productForm.is_customizable} onChange={(event) => setProductForm((current) => ({ ...current, is_customizable: event.target.checked }))} />
@@ -863,10 +903,12 @@ function VendorDashboardWorkspace({
                 <label className="vendor-form-grid__full">
                   Description
                   <textarea rows="5" value={productForm.description} onChange={(event) => setProductForm((current) => ({ ...current, description: event.target.value }))} required />
+                  {productErrors.description ? <div className="vendor-help text-danger">{(productErrors.description || []).join(' ')}</div> : null}
                 </label>
                 <label className="vendor-form-grid__full">
                   Sustainability Guidance
                   <textarea rows="3" placeholder="Keep this short, useful, and professional." value={productForm.sustainability_guidance} onChange={(event) => setProductForm((current) => ({ ...current, sustainability_guidance: event.target.value }))} />
+                  {productErrors.sustainability_guidance ? <div className="vendor-help text-danger">{(productErrors.sustainability_guidance || []).join(' ')}</div> : null}
                 </label>
                 {(productForm.is_customizable || productForm.product_type !== 'ready_made') ? (
                   <label className="vendor-form-grid__full">
