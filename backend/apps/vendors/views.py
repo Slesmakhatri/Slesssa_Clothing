@@ -20,6 +20,30 @@ from .repository import (
 from .serializers import VendorApplicationSerializer, VendorProfileSerializer
 
 
+def _normalize_payload(request):
+    """Normalize incoming request.data so single-valued query params or form fields
+    are returned as plain strings instead of lists. Also preserves lists when multiple
+    values are provided for the same key (e.g., repeated form fields)."""
+    payload = {}
+    # DRF's request.data may implement getlist (QueryDict). Use it when available.
+    if hasattr(request.data, 'getlist'):
+        for key in request.data.keys():
+            values = request.data.getlist(key)
+            if len(values) == 1:
+                payload[key] = values[0]
+            else:
+                payload[key] = values
+    else:
+        # fallback: iterate items
+        for key, val in request.data.items():
+            # protect against non-string iterables
+            if isinstance(val, (list, tuple)):
+                payload[key] = val[0] if len(val) == 1 else val
+            else:
+                payload[key] = val
+    return payload
+
+
 class VendorProfileViewSet(viewsets.ViewSet):
     lookup_field = "slug"
     pagination_class = None
@@ -42,7 +66,7 @@ class VendorProfileViewSet(viewsets.ViewSet):
         return Response(VendorProfileSerializer(vendor_to_public(vendor)).data)
 
     def create(self, request):
-        payload = dict(request.data)
+        payload = _normalize_payload(request)
         if "logo" in request.FILES:
             payload["logo"] = store_uploaded_file(request.FILES["logo"], "vendors/logos")
         if "banner" in request.FILES:
@@ -58,7 +82,7 @@ class VendorProfileViewSet(viewsets.ViewSet):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         if request.user.role not in {"admin", "super_admin"} and vendor["user"] != request.user.id:
             return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
-        payload = dict(request.data)
+        payload = _normalize_payload(request)
         if "logo" in request.FILES:
             payload["logo"] = store_uploaded_file(request.FILES["logo"], "vendors/logos")
         if "banner" in request.FILES:
@@ -89,7 +113,7 @@ class VendorApplicationAPIView(APIView):
         return Response(VendorApplicationSerializer(list_vendor_applications(request.user), many=True).data)
 
     def post(self, request):
-        payload = dict(request.data)
+        payload = _normalize_payload(request)
         documents = []
         if "document" in request.FILES:
             documents.append(store_uploaded_file(request.FILES["document"], "vendors/applications"))
@@ -101,10 +125,13 @@ class VendorApplicationAPIView(APIView):
         return Response(VendorApplicationSerializer(document).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request):
-        application = get_vendor_application(request.data.get("id"))
+        # request.data may be list-valued; normalize before reading id
+        normalized = _normalize_payload(request)
+        application = get_vendor_application(normalized.get("id"))
         if not application:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = VendorApplicationSerializer(data={**application, **request.data}, partial=True)
+        payload = {**application, **normalized}
+        serializer = VendorApplicationSerializer(data=payload, partial=True)
         serializer.is_valid(raise_exception=True)
         document = update_vendor_application(application["id"], serializer.validated_data)
         return Response(VendorApplicationSerializer(document).data)
