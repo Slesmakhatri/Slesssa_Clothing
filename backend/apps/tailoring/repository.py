@@ -1,7 +1,11 @@
+import logging
 import math
 from datetime import date, datetime
 
 from common.mongo import clean_document, get_collection, next_sequence, prepare_document_for_mongo, utcnow
+
+
+logger = logging.getLogger(__name__)
 
 
 DEMO_TAILOR_LOCATIONS = [
@@ -80,6 +84,18 @@ def _normalize_tailoring_request_document(document):
     if document.get("preferred_delivery_date"):
         document["preferred_delivery_date"] = _coerce_date(document.get("preferred_delivery_date"))
     return document
+
+
+def _user_summary_from_document(user_document):
+    user_document = clean_document(user_document) if user_document else None
+    if not user_document:
+        return None
+    return {
+        "id": user_document.get("id"),
+        "full_name": user_document.get("full_name", ""),
+        "email": user_document.get("email", ""),
+        "role": user_document.get("role", ""),
+    }
 
 
 def _user_id(user):
@@ -311,7 +327,53 @@ def get_measurement_for_user(user, measurement_id):
         return None
     if user.role in {"admin", "super_admin"} or measurement.get("user") == user.id:
         return clean_document(measurement)
+    if user.role == "tailor":
+        request_match = tailoring_requests_collection().find_one(
+            {
+                "measurement": measurement_id,
+                "$or": [{"assigned_tailor": user.id}, {"tailor_id": user.id}],
+            }
+        )
+        if request_match:
+            return clean_document(measurement)
     return None
+
+
+def update_measurement(user, measurement_id, data):
+    measurement = get_measurement_for_user(user, measurement_id)
+    if not measurement:
+        return None
+    allowed_fields = {
+        "chest",
+        "waist",
+        "hip",
+        "shoulder",
+        "sleeve_length",
+        "inseam",
+        "neck",
+        "height",
+        "source",
+        "confidence_score",
+        "suggestion_explanation",
+        "suggestion_basis",
+        "body_profile",
+        "photo_reference",
+        "notes",
+    }
+    payload = {key: value for key, value in data.items() if key in allowed_fields}
+    if not payload:
+        return measurement
+    measurements_collection().update_one({"id": measurement["id"]}, {"$set": prepare_document_for_mongo(payload)})
+    updated = clean_document(measurements_collection().find_one({"id": measurement["id"]}))
+    for request_document in tailoring_requests_collection().find({"measurement": measurement["id"]}):
+        clean_request = clean_document(request_document)
+        if user.role not in {"admin", "super_admin"} and not _request_accessible(user, clean_request):
+            continue
+        tailoring_requests_collection().update_one(
+            {"id": clean_request["id"]},
+            {"$set": prepare_document_for_mongo({"measurement_detail": updated})},
+        )
+    return updated
 
 
 def list_tailor_profiles(user, params=None):
@@ -393,11 +455,10 @@ def get_tailor_profile_for_user(user, profile_id):
 
 def update_tailor_profile(user, profile_id, data):
     profile = get_tailor_profile_for_user(user, profile_id)
-    if not profile or user.role not in {"admin", "super_admin"}:
+    if not profile:
         return None
-    updates = {
-        key: data[key]
-        for key in (
+    if user.role in {"admin", "super_admin"}:
+        allowed_fields = (
             "full_name",
             "years_of_experience",
             "specialization",
@@ -415,11 +476,115 @@ def update_tailor_profile(user, profile_id, data):
             "latitude",
             "longitude",
         )
-        if key in data
-    }
+    elif user.role == "tailor" and profile.get("user") == user.id:
+        allowed_fields = (
+            "full_name",
+            "years_of_experience",
+            "specialization",
+            "design_capabilities",
+            "style_categories",
+            "supported_clothing_types",
+            "short_bio",
+            "profile_image",
+            "is_available",
+            "location_name",
+            "address",
+            "city",
+            "latitude",
+            "longitude",
+        )
+    else:
+        return None
+
+    updates = {key: data[key] for key in allowed_fields if key in data}
     if updates:
         tailor_profiles_collection().update_one({"id": profile["id"]}, {"$set": prepare_document_for_mongo(updates)})
     return get_tailor_profile_for_user(user, profile["id"])
+
+
+def _resolve_tailor_assignment(value):
+    from apps.accounts.repository import get_user_by_id
+
+    tailor_user = None
+    tailor_profile = None
+    assignment_id = _safe_int_or_none(value)
+    if assignment_id is None:
+        return None, None, None
+
+    user_document = get_user_by_id(assignment_id)
+    if user_document and user_document.get("role") == "tailor":
+        tailor_user = clean_document(user_document)
+        tailor_profile = clean_document(tailor_profiles_collection().find_one({"user": tailor_user["id"]}))
+    else:
+        profile_document = clean_document(tailor_profiles_collection().find_one({"id": assignment_id}))
+        if profile_document:
+            tailor_profile = profile_document
+            user_document = get_user_by_id(profile_document.get("user"))
+            if user_document and user_document.get("role") == "tailor":
+                tailor_user = clean_document(user_document)
+
+    if tailor_profile:
+        tailor_profile = _hydrate_tailor_location(tailor_profile)
+
+    return tailor_user, _user_summary_from_document(tailor_user), tailor_profile
+
+
+def _hydrate_tailoring_request_relationships(document, persist=False):
+    from apps.products.repository import get_product_by_slug
+    from apps.vendors.repository import get_vendor_by_id
+
+    document = _normalize_tailoring_request_document(document)
+    if not document:
+        return document
+
+    updates = {}
+
+    measurement_id = _safe_int_or_none(document.get("measurement"))
+    if measurement_id:
+        measurement_detail = clean_document(measurements_collection().find_one({"id": measurement_id}))
+        if measurement_detail and document.get("measurement_detail") != measurement_detail:
+            updates["measurement_detail"] = measurement_detail
+
+    vendor_id = _safe_int_or_none(document.get("vendor_id") or document.get("vendor"))
+    if vendor_id is None and document.get("reference_product_slug"):
+        product = get_product_by_slug(document.get("reference_product_slug"))
+        vendor_id = _safe_int_or_none((product or {}).get("vendor"))
+    if vendor_id is not None:
+        vendor = get_vendor_by_id(vendor_id)
+        vendor_clean = clean_document(vendor) if vendor else None
+        if vendor_clean:
+            if document.get("vendor") != vendor_clean.get("id"):
+                updates["vendor"] = vendor_clean.get("id")
+            if document.get("vendor_id") != vendor_clean.get("id"):
+                updates["vendor_id"] = vendor_clean.get("id")
+            if document.get("vendor_detail") != vendor_clean:
+                updates["vendor_detail"] = vendor_clean
+
+    assigned_value = document.get("assigned_tailor") or document.get("tailor_id")
+    tailor_user, tailor_summary, tailor_profile = _resolve_tailor_assignment(assigned_value)
+    if assigned_value and tailor_user:
+        if document.get("assigned_tailor") != tailor_user["id"]:
+            updates["assigned_tailor"] = tailor_user["id"]
+        if document.get("tailor_id") != tailor_user["id"]:
+            updates["tailor_id"] = tailor_user["id"]
+        if document.get("assigned_tailor_detail") != tailor_summary:
+            updates["assigned_tailor_detail"] = tailor_summary
+        if document.get("tailor_profile_detail") != tailor_profile:
+            updates["tailor_profile_detail"] = tailor_profile
+
+    if document.get("reference_product_id") and document.get("product_id") != document.get("reference_product_id"):
+        updates["product_id"] = document.get("reference_product_id")
+
+    if updates and persist:
+        tailoring_requests_collection().update_one(
+            {"id": document["id"]},
+            {"$set": prepare_document_for_mongo(updates)},
+        )
+        document = {**document, **updates}
+    elif updates:
+        document = {**document, **updates}
+
+    return _normalize_tailoring_request_document(document)
 
 
 def _message_entry(request_document, sender, data):
@@ -826,8 +991,18 @@ def _notify_tailoring_status(document, status_value):
 
 
 def list_tailoring_requests(user):
-    documents = [_normalize_tailoring_request_document(document) for document in tailoring_requests_collection().find({}, sort=[("created_at", -1), ("id", -1)])]
-    return [document for document in documents if _request_accessible(user, document)]
+    documents = [
+        _hydrate_tailoring_request_relationships(document, persist=True)
+        for document in tailoring_requests_collection().find({}, sort=[("created_at", -1), ("id", -1)])
+    ]
+    visible = [document for document in documents if _request_accessible(user, document)]
+    logger.debug(
+        "Tailoring requests for user %s role %s -> %s visible records",
+        getattr(user, "id", None),
+        getattr(user, "role", None),
+        len(visible),
+    )
+    return visible
 
 
 def get_tailoring_request_for_user(user, request_id):
@@ -838,7 +1013,7 @@ def get_tailoring_request_for_user(user, request_id):
     document = tailoring_requests_collection().find_one({"id": request_id})
     if not document:
         return None
-    document = _normalize_tailoring_request_document(document)
+    document = _hydrate_tailoring_request_relationships(document, persist=True)
     return document if _request_accessible(user, document) else None
 
 
@@ -853,18 +1028,14 @@ def create_tailoring_request(user, data):
         product = get_product_by_slug(data.get("reference_product_slug"))
         vendor_id = _safe_int_or_none((product or {}).get("vendor"))
         vendor = get_vendor_by_id(vendor_id) if vendor_id else None
-    assigned_tailor = get_user_by_id(data.get("assigned_tailor")) if data.get("assigned_tailor") else None
-    tailor_profile = None
-    if assigned_tailor:
-        tailor_profile = tailor_profiles_collection().find_one({"user": assigned_tailor["id"]})
-        tailor_profile = _hydrate_tailor_location(clean_document(tailor_profile)) if tailor_profile else None
+    assigned_tailor, _, tailor_profile = _resolve_tailor_assignment(data.get("assigned_tailor"))
     document = _build_request_doc(user, data, measurement=measurement, vendor=vendor, assigned_tailor=assigned_tailor, tailor_profile=tailor_profile)
     tailoring_requests_collection().insert_one(prepare_document_for_mongo(document))
-    created = _normalize_tailoring_request_document(document)
+    created = _hydrate_tailoring_request_relationships(document, persist=True)
     if created.get("tailor_id") or created.get("assigned_tailor"):
-        from apps.chats.repository import ensure_tailor_request_conversation
+        from apps.chats.repository import sync_tailoring_request_conversation
 
-        ensure_tailor_request_conversation(created)
+        sync_tailoring_request_conversation(created)
     _notify_tailoring_created(created)
     return created
 
@@ -883,14 +1054,28 @@ def update_tailoring_request(user, request_id, updates):
         "preferred_delivery_date",
     }
     payload = {key: value for key, value in updates.items() if key in allowed}
+    if "assigned_tailor" in payload and payload.get("assigned_tailor"):
+        assigned_tailor, assigned_tailor_detail, tailor_profile = _resolve_tailor_assignment(payload.get("assigned_tailor"))
+        if assigned_tailor:
+            payload["assigned_tailor"] = assigned_tailor["id"]
+            payload["tailor_id"] = assigned_tailor["id"]
+            payload["assigned_tailor_detail"] = assigned_tailor_detail
+            payload["tailor_profile_detail"] = tailor_profile
     if "assigned_tailor" in payload and payload.get("assigned_tailor") and "status" not in payload:
         payload["status"] = "assigned"
+    if "measurement" in payload and payload.get("measurement"):
+        measurement_detail = clean_document(measurements_collection().find_one({"id": _safe_int_or_none(payload.get("measurement"))}))
+        if measurement_detail:
+            payload["measurement_detail"] = measurement_detail
     tailoring_requests_collection().update_one({"id": document["id"]}, {"$set": prepare_document_for_mongo(payload)})
-    updated = get_tailoring_request_for_user(user, document["id"])
+    updated_raw = tailoring_requests_collection().find_one({"id": document["id"]})
+    updated = _hydrate_tailoring_request_relationships(updated_raw, persist=True)
+    if not _request_accessible(user, updated):
+        return None
     if updated and (updated.get("tailor_id") or updated.get("assigned_tailor")):
-        from apps.chats.repository import ensure_tailor_request_conversation
+        from apps.chats.repository import sync_tailoring_request_conversation
 
-        ensure_tailor_request_conversation(updated)
+        sync_tailoring_request_conversation(updated)
     return updated
 
 
@@ -922,4 +1107,10 @@ def add_tailoring_message(user, data):
     next_status = update_payload.get("status", previous_status)
     if next_status != previous_status:
         _notify_tailoring_status(document, next_status)
+    updated_document = tailoring_requests_collection().find_one({"id": document["id"]})
+    updated_document = _hydrate_tailoring_request_relationships(updated_document, persist=False)
+    if updated_document and (updated_document.get("tailor_id") or updated_document.get("assigned_tailor")):
+        from apps.chats.repository import sync_tailoring_request_conversation
+
+        sync_tailoring_request_conversation(updated_document, actor=user)
     return entry

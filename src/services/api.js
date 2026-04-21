@@ -598,7 +598,7 @@ export async function updatePlatformSettings(payload) {
 }
 
 export async function listTailoringRequests() {
-  const payload = await apiRequest('/tailoring-requests/');
+  const payload = await apiRequest('/tailoring-requests/', { requiresAuth: true });
   return unwrapListResponse(payload);
 }
 
@@ -744,10 +744,19 @@ export async function listTailorProfiles(params = {}) {
   return unwrapListResponse(payload);
 }
 
+export async function updateTailorProfile(id, payload) {
+  return apiRequest(`/tailor-profiles/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    requiresAuth: true
+  });
+}
+
 export async function updateTailorProfileStatus(id, approvalStatus) {
   return apiRequest(`/tailor-profiles/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify({ approval_status: approvalStatus })
+    body: JSON.stringify({ approval_status: approvalStatus }),
+    requiresAuth: true
   });
 }
 
@@ -759,7 +768,7 @@ export async function getTailorRecommendation(payload) {
 }
 
 export async function getTailoringRequest(id) {
-  return apiRequest(`/tailoring-requests/${id}/`);
+  return apiRequest(`/tailoring-requests/${id}/`, { requiresAuth: true });
 }
 
 export async function createTailoringRequest(formData) {
@@ -782,7 +791,9 @@ export async function listTailoringMessages(params = {}) {
   const searchParams = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
   );
-  const payload = await apiRequest(`/tailoring-messages/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
+  const payload = await apiRequest(`/tailoring-messages/${searchParams.toString() ? `?${searchParams.toString()}` : ''}`, {
+    requiresAuth: true
+  });
   return unwrapListResponse(payload);
 }
 
@@ -797,6 +808,14 @@ export async function createTailoringMessage(formData) {
 export async function createMeasurement(payload) {
   return apiRequest('/measurements/', {
     method: 'POST',
+    body: JSON.stringify(payload),
+    requiresAuth: true
+  });
+}
+
+export async function updateMeasurement(id, payload) {
+  return apiRequest(`/measurements/${id}/`, {
+    method: 'PATCH',
     body: JSON.stringify(payload),
     requiresAuth: true
   });

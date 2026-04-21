@@ -17,6 +17,7 @@ from .repository import (
     list_tailoring_messages,
     list_tailoring_requests,
     suggest_measurements_for_profile,
+    update_measurement,
     update_tailor_profile,
     update_tailoring_request,
 )
@@ -57,6 +58,17 @@ class MeasurementViewSet(viewsets.ViewSet):
         measurement = create_measurement(request.user, serializer.validated_data)
         return Response(MeasurementSerializer(measurement).data, status=status.HTTP_201_CREATED)
 
+    def partial_update(self, request, pk=None):
+        serializer = MeasurementSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        measurement = update_measurement(request.user, pk, serializer.validated_data)
+        if not measurement:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(MeasurementSerializer(measurement).data)
+
+    def update(self, request, pk=None):
+        return self.partial_update(request, pk=pk)
+
 
 class MeasurementSuggestionAPIView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -74,7 +86,7 @@ class TailorProfileViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         if self.action in ["update", "partial_update"]:
-            return [permissions.IsAuthenticated(), IsAdminRole()]
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
 
     def list(self, request):

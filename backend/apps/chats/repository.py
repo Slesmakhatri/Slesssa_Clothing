@@ -290,6 +290,112 @@ def _message_document(conversation, sender, body, attachment=""):
     }
 
 
+def _conversation_document(conversation_id):
+    return clean_document(conversations_collection().find_one({"id": int(conversation_id)}))
+
+
+def _sync_conversation_last_message(conversation_id):
+    conversation = _conversation_document(conversation_id)
+    if not conversation:
+        return None
+    last_message = _latest_message_preview(conversation_id)
+    update_payload = {
+        "updated_at": (last_message or {}).get("created_at") or conversation.get("updated_at") or utcnow(),
+        "last_message_at": (last_message or {}).get("created_at"),
+        "last_message_preview": ((last_message or {}).get("body") or "")[:140],
+    }
+    conversations_collection().update_one({"id": int(conversation_id)}, {"$set": prepare_document_for_mongo(update_payload)})
+    return _conversation_document(conversation_id)
+
+
+def _tailoring_message_to_chat_message(conversation, request_message):
+    sender_detail = _mapping_or_empty(request_message.get("sender_detail"))
+    sender_user_id = request_message.get("sender") or sender_detail.get("id")
+    attachment = ""
+    attachments = request_message.get("attachments") or []
+    if attachments:
+        attachment = _mapping_or_empty(attachments[0]).get("reference_image", "")
+    body = (
+        request_message.get("body")
+        or request_message.get("design_notes")
+        or request_message.get("status_snapshot")
+        or "Tailoring update"
+    )
+    return {
+        "id": next_sequence("chat_messages"),
+        "conversation_id": conversation["id"],
+        "sender_id": sender_user_id,
+        "sender_user_id": sender_user_id,
+        "sender_role": request_message.get("sender_role") or sender_detail.get("role", ""),
+        "sender_detail": {
+            "id": sender_user_id,
+            "full_name": sender_detail.get("full_name", ""),
+            "email": sender_detail.get("email", ""),
+            "role": request_message.get("sender_role") or sender_detail.get("role", ""),
+            "avatar": sender_detail.get("avatar", ""),
+        },
+        "body": body,
+        "attachment": attachment,
+        "is_read": True,
+        "read_by_user_ids": [sender_user_id] if sender_user_id else [],
+        "created_at": request_message.get("created_at") or utcnow(),
+        "deleted_for_user_ids": [],
+        "source_request_message_id": request_message.get("id"),
+    }
+
+
+def _append_chat_message_to_tailoring_request(conversation, chat_message):
+    if conversation.get("kind") != "customer_tailor" or not conversation.get("tailoring_request_id"):
+        return
+    from apps.tailoring.repository import tailoring_requests_collection
+
+    request_document = clean_document(
+        tailoring_requests_collection().find_one({"id": int(conversation["tailoring_request_id"])})
+    )
+    if not request_document:
+        return
+    messages = request_document.get("messages") or []
+    if any(item.get("source_chat_message_id") == chat_message["id"] for item in messages):
+        return
+    attachments = []
+    if chat_message.get("attachment"):
+        attachments.append(
+            {
+                "id": next_sequence("tailoring_message_attachments"),
+                "reference_image": chat_message["attachment"],
+                "caption": "",
+                "created_at": chat_message.get("created_at") or utcnow(),
+            }
+        )
+    messages.append(
+        {
+            "id": next_sequence("tailoring_messages"),
+            "request": request_document["id"],
+            "sender": chat_message.get("sender_user_id") or chat_message.get("sender_id"),
+            "sender_role": chat_message.get("sender_role", ""),
+            "sender_detail": _mapping_or_empty(chat_message.get("sender_detail")),
+            "body": chat_message.get("body", ""),
+            "design_notes": "",
+            "measurement_snapshot": {},
+            "fabric_preference": "",
+            "color_preference": "",
+            "price_estimate": None,
+            "delivery_estimate": "",
+            "status_snapshot": "",
+            "attachments": attachments,
+            "created_at": chat_message.get("created_at") or utcnow(),
+            "source_chat_message_id": chat_message["id"],
+        }
+    )
+    update_payload = {"messages": messages}
+    if request_document.get("status") == "request_sent":
+        update_payload["status"] = "discussion_ongoing"
+    tailoring_requests_collection().update_one(
+        {"id": request_document["id"]},
+        {"$set": prepare_document_for_mongo(update_payload)},
+    )
+
+
 def _decorate_message_for_user(user, message):
     document = clean_document(message)
     sender_user_id = document.get("sender_user_id") or document.get("sender_id")
@@ -470,7 +576,7 @@ def _ensure_tailor_request_conversations_for_user(user):
     from apps.tailoring.repository import list_tailoring_requests
 
     for request_document in list_tailoring_requests(user):
-        ensure_tailor_request_conversation(request_document, actor=user)
+        sync_tailoring_request_conversation(request_document, actor=user)
 
 
 def ensure_tailor_request_conversation(request_document, actor=None):
@@ -530,6 +636,26 @@ def ensure_tailor_request_conversation(request_document, actor=None):
     }
     conversations_collection().insert_one(prepare_document_for_mongo(document))
     return document
+
+
+def sync_tailoring_request_conversation(request_document, actor=None):
+    conversation = ensure_tailor_request_conversation(request_document, actor=actor)
+    if not conversation:
+        return None
+    conversation_id = conversation["id"]
+    existing_source_ids = {
+        clean_document(message).get("source_request_message_id")
+        for message in messages_collection().find({"conversation_id": int(conversation_id)})
+    }
+    request_messages = request_document.get("messages") or []
+    for request_message in request_messages:
+        source_id = request_message.get("id")
+        if source_id in existing_source_ids:
+            continue
+        message_document = _tailoring_message_to_chat_message(conversation, request_message)
+        messages_collection().insert_one(prepare_document_for_mongo(message_document))
+    synced = _sync_conversation_last_message(conversation_id)
+    return synced or conversation
 
 
 def _vendor_user_ids_for_order(order):
@@ -703,6 +829,12 @@ def list_messages_for_conversation(user, conversation_id):
     conversation = get_conversation_for_user(user, conversation_id)
     if not conversation:
         return None
+    if conversation.get("kind") == "customer_tailor" and conversation.get("tailoring_request_id"):
+        from apps.tailoring.repository import get_tailoring_request_for_user
+
+        request_document = get_tailoring_request_for_user(user, conversation.get("tailoring_request_id"))
+        if request_document:
+            sync_tailoring_request_conversation(request_document, actor=user)
     documents = [
         clean_document(item)
         for item in messages_collection().find({"conversation_id": conversation_id}, sort=[("created_at", 1), ("id", 1)])
@@ -730,6 +862,7 @@ def send_message(user, conversation_id, payload):
         {"id": conversation["id"]},
         {"$set": prepare_document_for_mongo({"updated_at": utcnow(), "last_message_at": document["created_at"], "last_message_preview": document["body"][:140]})},
     )
+    _append_chat_message_to_tailoring_request(conversation, document)
     return _decorate_message_for_user(user, document)
 
 

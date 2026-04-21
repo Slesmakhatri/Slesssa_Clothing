@@ -151,8 +151,8 @@ function App() {
 
       <Route path={ROUTE_PATHS.tailorDashboard} element={<RoleRoute allowedRoles={['tailor']}><TailorLayout /></RoleRoute>}>
         <Route index element={<TailorDashboardPage />} />
-        <Route path="earnings" element={<RolePanelPage role="tailor" title="Earnings" description="Tailor earnings and payout visibility stays separate from vendor payout operations." cards={tailorModuleCards.earnings} />} />
-        <Route path="settings" element={<RolePanelPage role="tailor" title="Settings" description="Tailor account and workspace settings are isolated from customer and vendor experiences." cards={tailorModuleCards.settings} />} />
+        <Route path="earnings" element={<TailorDashboardPage />} />
+        <Route path="settings" element={<TailorDashboardPage />} />
         <Route path=":section" element={<TailorDashboardPage />} />
       </Route>
 
