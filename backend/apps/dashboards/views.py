@@ -1,5 +1,6 @@
 from decimal import Decimal
 from statistics import mean
+import logging
 
 from rest_framework import permissions
 from rest_framework.response import Response
@@ -16,6 +17,8 @@ from apps.support.repository import list_support_messages
 from apps.tailoring.repository import list_tailoring_requests
 from apps.vendors.repository import get_vendor_by_user_id, list_vendor_applications, list_vendors
 from common.mongo import clean_document, get_collection, prepare_document_for_mongo, utcnow
+
+logger = logging.getLogger(__name__)
 
 
 PLATFORM_SETTINGS_ID = "platform_settings"
@@ -282,6 +285,15 @@ class VendorDashboardAPIView(APIView):
                     payout_total += Decimal(str(item.get("vendor_payout_amount", 0) or 0))
                     payout_status = str(item.get("payout_status") or "pending").lower()
                     payout_breakdown[payout_status] = payout_breakdown.get(payout_status, 0) + 1
+        logger.debug(
+            "Vendor dashboard user_id=%s vendor_id=%s products=%s orders=%s recent=%s revenue=%s",
+            request.user.id,
+            vendor_id,
+            len(products),
+            len(vendor_orders),
+            [order.get("order_number") for order in vendor_orders[:5]],
+            _decimal_to_float(revenue),
+        )
         return Response(
             {
                 "products_count": len(products),
