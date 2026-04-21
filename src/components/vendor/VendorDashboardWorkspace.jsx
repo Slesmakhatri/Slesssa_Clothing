@@ -121,6 +121,7 @@ function VendorSectionHeader({ title, description, action }) {
 
 function VendorDashboardWorkspace({
   initialSection = 'dashboard',
+  initialMessageMode = 'customers',
   showInternalNav = true,
   showWorkspaceHeader = true
 }) {
@@ -254,7 +255,6 @@ function VendorDashboardWorkspace({
       setReturns(returnList);
       setReviews(reviewList);
       setQuestions(questionList);
-      console.debug('Categories fetched for vendor workspace:', categoryList);
       setCategories(categoryList || []);
       setShopForm({
         brand_name: ownVendor?.brand_name || '',
@@ -297,7 +297,7 @@ function VendorDashboardWorkspace({
       );
       setAnswerDrafts(Object.fromEntries(questionList.map((item) => [item.id, item.answer || ''])));
     } catch (requestError) {
-      setError(requestError.message || 'Unable to load the vendor workspace.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to load the vendor workspace.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -313,6 +313,10 @@ function VendorDashboardWorkspace({
       setActiveSection(initialSection);
     }
   }, [initialSection]);
+
+  useEffect(() => {
+    setMessageMode(initialMessageMode === 'admin' ? 'admin' : 'customers');
+  }, [initialMessageMode]);
 
   useEffect(() => {
     const hashSection = String(location.hash || '').replace('#', '');
@@ -411,6 +415,7 @@ function VendorDashboardWorkspace({
     }
     setSavingSection('product');
     setProductErrors({});
+    setError('');
     try {
       // Build a typed payload first
       const payload = {
@@ -535,7 +540,9 @@ function VendorDashboardWorkspace({
       setActiveSection('products');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to save product.');
+      const nextErrors = requestError?.payload && typeof requestError.payload === 'object' ? requestError.payload : {};
+      setProductErrors(nextErrors);
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to save product.');
     } finally {
       setSavingSection('');
     }
@@ -549,7 +556,7 @@ function VendorDashboardWorkspace({
       pushNotice('Product deleted.');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to delete product.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to delete product.');
     } finally {
       setSavingSection('');
     }
@@ -562,7 +569,7 @@ function VendorDashboardWorkspace({
       pushNotice('Order status updated.');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to update order status.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to update order status.');
     } finally {
       setSavingSection('');
     }
@@ -575,7 +582,7 @@ function VendorDashboardWorkspace({
       pushNotice('Return request updated.');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to update return request.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to update return request.');
     } finally {
       setSavingSection('');
     }
@@ -590,7 +597,7 @@ function VendorDashboardWorkspace({
       pushNotice('Review visibility updated.');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to update review.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to update review.');
     } finally {
       setSavingSection('');
     }
@@ -606,7 +613,7 @@ function VendorDashboardWorkspace({
       pushNotice('Question response saved.');
       await loadWorkspace({ silent: true });
     } catch (requestError) {
-      setError(requestError.message || 'Unable to save answer.');
+      setError(requestError?.payload?.detail || requestError.message || 'Unable to save answer.');
     } finally {
       setSavingSection('');
     }
