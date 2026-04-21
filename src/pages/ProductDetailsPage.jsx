@@ -64,11 +64,18 @@ function ProductDetailsPage() {
         }
       });
 
-    listProducts().then((items) => {
-      if (active) {
-        setCatalog(items.map(normalizeProduct));
-      }
-    });
+    listProducts()
+      .then((items) => {
+        if (active) {
+          const nextItems = Array.isArray(items) && items.length ? items : storefrontProducts;
+          setCatalog(nextItems.map(normalizeProduct));
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCatalog(storefrontProducts.map(normalizeProduct));
+        }
+      });
 
     return () => {
       active = false;
