@@ -556,134 +556,128 @@ function SuperAdminDashboardPage() {
           <div className="col-12">
             <div className="table-card super-admin-vendor-panel">
               <SectionTitle eyebrow="Applications" title="Vendor applications" text="Approve applications so vendors can complete signup and start selling." align="start" />
-              <div className="table-responsive">
-                <table className="table align-middle mb-0 super-admin-vendor-table">
-                  <thead>
-                    <tr>
-                      <th>Business</th>
-                      <th>Applicant</th>
-                      <th>Specialization</th>
-                      <th>Location</th>
-                      <th>Status</th>
-                      <th>Review Note</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vendorApplications.length ? vendorApplications.map((application) => (
-                      <tr key={application.id}>
-                        <td>
-                          <strong>{application.business_name}</strong>
-                          <div className="vendor-table-meta">{application.business_description || 'No description provided.'}</div>
-                        </td>
-                        <td>
-                          <strong>{application.full_name}</strong>
-                          <div className="vendor-table-meta">{application.email}</div>
-                          <div className="vendor-table-meta">{application.phone}</div>
-                        </td>
-                        <td>{application.specialization || 'Not provided'}</td>
-                        <td>{application.location || 'Not provided'}</td>
-                        <td><span className={`status-pill status-${application.status}`}>{application.status}</span></td>
-                        <td>
-                          <textarea
-                            rows="2"
-                            className="super-admin-review-note"
-                            placeholder="Optional note"
-                            value={vendorReviewNotes[application.id] ?? application.review_note ?? ''}
-                            onChange={(event) => setVendorReviewNotes((current) => ({ ...current, [application.id]: event.target.value }))}
-                          />
-                        </td>
-                        <td>
-                          <div className="vendor-table-actions">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-dark"
-                              disabled={savingVendorAction === `application-${application.id}-approved` || application.status === 'approved'}
-                              onClick={() => handleVendorApplicationDecision(application, 'approved')}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-danger"
-                              disabled={savingVendorAction === `application-${application.id}-rejected` || application.status === 'rejected'}
-                              onClick={() => handleVendorApplicationDecision(application, 'rejected')}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="7">No vendor applications yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PaginatedTable
+                items={vendorApplications}
+                columns={[
+                  { key: 'business', label: 'Business' },
+                  { key: 'applicant', label: 'Applicant' },
+                  { key: 'specialization', label: 'Specialization' },
+                  { key: 'location', label: 'Location' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'reviewNote', label: 'Review Note' },
+                  { key: 'actions', label: 'Actions' }
+                ]}
+                tableClassName="super-admin-vendor-table"
+                itemLabel="vendor applications"
+                initialPageSize={5}
+                emptyText="No vendor applications yet."
+                renderRow={(application, _index, key) => (
+                  <tr key={key}>
+                    <td>
+                      <strong>{application.business_name}</strong>
+                      <div className="vendor-table-meta">{application.business_description || 'No description provided.'}</div>
+                    </td>
+                    <td>
+                      <strong>{application.full_name}</strong>
+                      <div className="vendor-table-meta">{application.email}</div>
+                      <div className="vendor-table-meta">{application.phone}</div>
+                    </td>
+                    <td>{application.specialization || 'Not provided'}</td>
+                    <td>{application.location || 'Not provided'}</td>
+                    <td><span className={`status-pill status-${application.status}`}>{application.status}</span></td>
+                    <td>
+                      <textarea
+                        rows="2"
+                        className="super-admin-review-note"
+                        placeholder="Optional note"
+                        value={vendorReviewNotes[application.id] ?? application.review_note ?? ''}
+                        onChange={(event) => setVendorReviewNotes((current) => ({ ...current, [application.id]: event.target.value }))}
+                      />
+                    </td>
+                    <td>
+                      <div className="vendor-table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-dark"
+                          disabled={savingVendorAction === `application-${application.id}-approved` || application.status === 'approved'}
+                          onClick={() => handleVendorApplicationDecision(application, 'approved')}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          disabled={savingVendorAction === `application-${application.id}-rejected` || application.status === 'rejected'}
+                          onClick={() => handleVendorApplicationDecision(application, 'rejected')}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              />
             </div>
           </div>
 
           <div className="col-12">
             <div className="table-card super-admin-vendor-panel">
               <SectionTitle eyebrow="Profiles" title="Vendor list" text="Manage vendor profiles that already exist in the system." align="start" />
-              <div className="table-responsive">
-                <table className="table align-middle mb-0 super-admin-vendor-table">
-                  <thead>
-                    <tr>
-                      <th>Shop</th>
-                      <th>Owner</th>
-                      <th>Contact</th>
-                      <th>Specialization</th>
-                      <th>Setup</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vendors.length ? vendors.map((vendor) => (
-                      <tr key={vendor.id}>
-                        <td>
-                          <strong>{vendor.brand_name || 'Unnamed shop'}</strong>
-                          <div className="vendor-table-meta">{vendor.location || vendor.address || 'No location added'}</div>
-                        </td>
-                        <td>
-                          <strong>{vendor.user_detail?.full_name || vendor.user_detail?.username || 'Vendor'}</strong>
-                          <div className="vendor-table-meta">{vendor.user_detail?.email || 'No account email'}</div>
-                        </td>
-                        <td>
-                          <div>{vendor.contact_email || 'No email'}</div>
-                          <div className="vendor-table-meta">{vendor.contact_phone || 'No phone'}</div>
-                        </td>
-                        <td>{vendor.specialization || 'Not provided'}</td>
-                        <td>{vendor.is_shop_setup_complete ? 'Complete' : 'Incomplete'}</td>
-                        <td><span className={`status-pill status-${vendor.approval_status}`}>{vendor.approval_status}</span></td>
-                        <td>
-                          <div className="vendor-table-actions">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-dark"
-                              disabled={savingVendorAction === `vendor-${vendor.slug}-approved` || vendor.approval_status === 'approved'}
-                              onClick={() => handleVendorStatusDecision(vendor, 'approved')}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-danger"
-                              disabled={savingVendorAction === `vendor-${vendor.slug}-rejected` || vendor.approval_status === 'rejected'}
-                              onClick={() => handleVendorStatusDecision(vendor, 'rejected')}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="7">No vendor profiles found.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <PaginatedTable
+                items={vendors}
+                columns={[
+                  { key: 'shop', label: 'Shop' },
+                  { key: 'owner', label: 'Owner' },
+                  { key: 'contact', label: 'Contact' },
+                  { key: 'specialization', label: 'Specialization' },
+                  { key: 'setup', label: 'Setup' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'actions', label: 'Actions' }
+                ]}
+                tableClassName="super-admin-vendor-table"
+                itemLabel="vendors"
+                initialPageSize={5}
+                emptyText="No vendor profiles found."
+                renderRow={(vendor, _index, key) => (
+                  <tr key={key}>
+                    <td>
+                      <strong>{vendor.brand_name || 'Unnamed shop'}</strong>
+                      <div className="vendor-table-meta">{vendor.location || vendor.address || 'No location added'}</div>
+                    </td>
+                    <td>
+                      <strong>{vendor.user_detail?.full_name || vendor.user_detail?.username || 'Vendor'}</strong>
+                      <div className="vendor-table-meta">{vendor.user_detail?.email || 'No account email'}</div>
+                    </td>
+                    <td>
+                      <div>{vendor.contact_email || 'No email'}</div>
+                      <div className="vendor-table-meta">{vendor.contact_phone || 'No phone'}</div>
+                    </td>
+                    <td>{vendor.specialization || 'Not provided'}</td>
+                    <td>{vendor.is_shop_setup_complete ? 'Complete' : 'Incomplete'}</td>
+                    <td><span className={`status-pill status-${vendor.approval_status}`}>{vendor.approval_status}</span></td>
+                    <td>
+                      <div className="vendor-table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-dark"
+                          disabled={savingVendorAction === `vendor-${vendor.slug}-approved` || vendor.approval_status === 'approved'}
+                          onClick={() => handleVendorStatusDecision(vendor, 'approved')}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          disabled={savingVendorAction === `vendor-${vendor.slug}-rejected` || vendor.approval_status === 'rejected'}
+                          onClick={() => handleVendorStatusDecision(vendor, 'rejected')}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              />
             </div>
           </div>
         </div>
@@ -709,73 +703,70 @@ function SuperAdminDashboardPage() {
 
         <div className="table-card super-admin-tailor-panel">
           <SectionTitle eyebrow="Approval" title="Tailor list" text="Only approved and available tailors are shown to customers for recommendations." align="start" />
-          <div className="table-responsive">
-            <table className="table align-middle mb-0 super-admin-tailor-table">
-              <thead>
-                <tr>
-                  <th>Tailor</th>
-                  <th>Contact</th>
-                  <th>Specialization</th>
-                  <th>Experience</th>
-                  <th>Location</th>
-                  <th>Availability</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+          <PaginatedTable
+            items={tailors}
+            columns={[
+              { key: 'tailor', label: 'Tailor' },
+              { key: 'contact', label: 'Contact' },
+              { key: 'specialization', label: 'Specialization' },
+              { key: 'experience', label: 'Experience' },
+              { key: 'location', label: 'Location' },
+              { key: 'availability', label: 'Availability' },
+              { key: 'status', label: 'Status' },
+              { key: 'actions', label: 'Actions' }
+            ]}
+            tableClassName="super-admin-tailor-table"
+            itemLabel="tailors"
+            initialPageSize={5}
+            emptyText="No tailor profiles found."
+            renderRow={(tailor, _index, key) => {
+              const approvalStatus = tailor.approval_status || 'pending';
+              const displayName = tailor.full_name || tailor.user_detail?.full_name || 'Unnamed tailor';
+              return (
+                <tr key={key}>
+                  <td>
+                    <strong>{displayName}</strong>
+                    <div className="vendor-table-meta">{tailor.short_bio || 'No profile bio added.'}</div>
+                  </td>
+                  <td>
+                    <div>{tailor.user_detail?.email || 'No email'}</div>
+                    <div className="vendor-table-meta">{tailor.user_detail?.phone || 'No phone'}</div>
+                  </td>
+                  <td>
+                    <strong>{tailor.specialization || 'Custom tailoring'}</strong>
+                    <div className="vendor-table-meta">{(tailor.supported_clothing_types || []).join(', ') || 'Clothing types not listed'}</div>
+                  </td>
+                  <td>{Number(tailor.years_of_experience || 0)} years</td>
+                  <td>
+                    <div>{tailor.city || tailor.location_name || 'Not provided'}</div>
+                    <div className="vendor-table-meta">{tailor.address || 'No address'}</div>
+                  </td>
+                  <td>{tailor.is_available ? 'Available' : 'Unavailable'}</td>
+                  <td><span className={`status-pill status-${approvalStatus}`}>{approvalStatus}</span></td>
+                  <td>
+                    <div className="vendor-table-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-dark"
+                        disabled={savingTailorAction === `tailor-${tailor.id}-approved` || approvalStatus === 'approved'}
+                        onClick={() => handleTailorStatusDecision(tailor, 'approved')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-danger"
+                        disabled={savingTailorAction === `tailor-${tailor.id}-rejected` || approvalStatus === 'rejected'}
+                        onClick={() => handleTailorStatusDecision(tailor, 'rejected')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {tailors.length ? tailors.map((tailor) => {
-                  const approvalStatus = tailor.approval_status || 'pending';
-                  const displayName = tailor.full_name || tailor.user_detail?.full_name || 'Unnamed tailor';
-                  return (
-                    <tr key={tailor.id}>
-                      <td>
-                        <strong>{displayName}</strong>
-                        <div className="vendor-table-meta">{tailor.short_bio || 'No profile bio added.'}</div>
-                      </td>
-                      <td>
-                        <div>{tailor.user_detail?.email || 'No email'}</div>
-                        <div className="vendor-table-meta">{tailor.user_detail?.phone || 'No phone'}</div>
-                      </td>
-                      <td>
-                        <strong>{tailor.specialization || 'Custom tailoring'}</strong>
-                        <div className="vendor-table-meta">{(tailor.supported_clothing_types || []).join(', ') || 'Clothing types not listed'}</div>
-                      </td>
-                      <td>{Number(tailor.years_of_experience || 0)} years</td>
-                      <td>
-                        <div>{tailor.city || tailor.location_name || 'Not provided'}</div>
-                        <div className="vendor-table-meta">{tailor.address || 'No address'}</div>
-                      </td>
-                      <td>{tailor.is_available ? 'Available' : 'Unavailable'}</td>
-                      <td><span className={`status-pill status-${approvalStatus}`}>{approvalStatus}</span></td>
-                      <td>
-                        <div className="vendor-table-actions">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-dark"
-                            disabled={savingTailorAction === `tailor-${tailor.id}-approved` || approvalStatus === 'approved'}
-                            onClick={() => handleTailorStatusDecision(tailor, 'approved')}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            disabled={savingTailorAction === `tailor-${tailor.id}-rejected` || approvalStatus === 'rejected'}
-                            onClick={() => handleTailorStatusDecision(tailor, 'rejected')}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }) : (
-                  <tr><td colSpan="8">No tailor profiles found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              );
+            }}
+          />
         </div>
       </div>
     );
@@ -804,72 +795,69 @@ function SuperAdminDashboardPage() {
 
         <div className="table-card super-admin-order-panel">
           <SectionTitle eyebrow="Order List" title="All orders" text="Update order status from the Super Admin workspace." align="start" />
-          <div className="table-responsive">
-            <table className="table align-middle mb-0 super-admin-order-table">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Customer</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th>Payment</th>
-                  <th>City</th>
-                  <th>Status</th>
-                  <th>Update Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length ? orders.map((order) => (
-                  <tr key={order.id}>
-                    <td>
-                      <strong>{order.order_number || `Order #${order.id}`}</strong>
-                      <div className="vendor-table-meta">{formatDate(order.created_at)}</div>
-                    </td>
-                    <td>
-                      <strong>{order.full_name || 'Customer'}</strong>
-                      <div className="vendor-table-meta">{order.email}</div>
-                      <div className="vendor-table-meta">{order.phone}</div>
-                    </td>
-                    <td>
-                      <strong>{(order.items || []).length} item{(order.items || []).length === 1 ? '' : 's'}</strong>
-                      <div className="vendor-table-meta">
-                        {(order.items || []).slice(0, 2).map((item) => item.product_name).filter(Boolean).join(', ') || 'No item details'}
-                      </div>
-                    </td>
-                    <td>NPR {Number(order.total || 0).toLocaleString()}</td>
-                    <td>
-                      <span className={`status-pill status-${String(order.payment_status || 'pending').toLowerCase()}`}>
-                        {order.payment_status || 'pending'}
-                      </span>
-                    </td>
-                    <td>{order.city || 'N/A'}</td>
-                    <td>
-                      <span className={`status-pill status-${String(order.status || 'pending').toLowerCase()}`}>
-                        {formatOrderStatus(order.status)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="super-admin-status-actions">
-                        {ORDER_STATUS_ACTIONS.map((statusAction) => (
-                          <button
-                            key={statusAction.value}
-                            type="button"
-                            className={`btn btn-sm ${String(order.status || '').toLowerCase() === statusAction.value ? 'btn-dark' : 'btn-outline-dark'}`}
-                            disabled={savingOrderAction === `order-${order.id}-${statusAction.value}` || String(order.status || '').toLowerCase() === statusAction.value}
-                            onClick={() => handleOrderStatusDecision(order, statusAction.value)}
-                          >
-                            {statusAction.label}
-                          </button>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="8">No orders found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <PaginatedTable
+            items={orders}
+            columns={[
+              { key: 'order', label: 'Order' },
+              { key: 'customer', label: 'Customer' },
+              { key: 'items', label: 'Items' },
+              { key: 'total', label: 'Total' },
+              { key: 'payment', label: 'Payment' },
+              { key: 'city', label: 'City' },
+              { key: 'status', label: 'Status' },
+              { key: 'updateStatus', label: 'Update Status' }
+            ]}
+            tableClassName="super-admin-order-table"
+            itemLabel="orders"
+            initialPageSize={10}
+            emptyText="No orders found."
+            renderRow={(order, _index, key) => (
+              <tr key={key}>
+                <td>
+                  <strong>{order.order_number || `Order #${order.id}`}</strong>
+                  <div className="vendor-table-meta">{formatDate(order.created_at)}</div>
+                </td>
+                <td>
+                  <strong>{order.full_name || 'Customer'}</strong>
+                  <div className="vendor-table-meta">{order.email}</div>
+                  <div className="vendor-table-meta">{order.phone}</div>
+                </td>
+                <td>
+                  <strong>{(order.items || []).length} item{(order.items || []).length === 1 ? '' : 's'}</strong>
+                  <div className="vendor-table-meta">
+                    {(order.items || []).slice(0, 2).map((item) => item.product_name).filter(Boolean).join(', ') || 'No item details'}
+                  </div>
+                </td>
+                <td>NPR {Number(order.total || 0).toLocaleString()}</td>
+                <td>
+                  <span className={`status-pill status-${String(order.payment_status || 'pending').toLowerCase()}`}>
+                    {order.payment_status || 'pending'}
+                  </span>
+                </td>
+                <td>{order.city || 'N/A'}</td>
+                <td>
+                  <span className={`status-pill status-${String(order.status || 'pending').toLowerCase()}`}>
+                    {formatOrderStatus(order.status)}
+                  </span>
+                </td>
+                <td>
+                  <div className="super-admin-status-actions">
+                    {ORDER_STATUS_ACTIONS.map((statusAction) => (
+                      <button
+                        key={statusAction.value}
+                        type="button"
+                        className={`btn btn-sm ${String(order.status || '').toLowerCase() === statusAction.value ? 'btn-dark' : 'btn-outline-dark'}`}
+                        disabled={savingOrderAction === `order-${order.id}-${statusAction.value}` || String(order.status || '').toLowerCase() === statusAction.value}
+                        onClick={() => handleOrderStatusDecision(order, statusAction.value)}
+                      >
+                        {statusAction.label}
+                      </button>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            )}
+          />
         </div>
       </div>
     );
@@ -897,42 +885,39 @@ function SuperAdminDashboardPage() {
 
         <div className="table-card super-admin-return-panel">
           <SectionTitle eyebrow="Return Requests" title="Customer returns" text="Requests are loaded from the protected return request API." align="start" />
-          <div className="table-responsive">
-            <table className="table align-middle mb-0 super-admin-return-table">
-              <thead>
-                <tr>
-                  <th>Request</th>
-                  <th>Customer</th>
-                  <th>Order</th>
-                  <th>Reason</th>
-                  <th>Status</th>
-                  <th>Created</th>
+          <PaginatedTable
+            items={returnRequests}
+            columns={[
+              { key: 'request', label: 'Request' },
+              { key: 'customer', label: 'Customer' },
+              { key: 'order', label: 'Order' },
+              { key: 'reason', label: 'Reason' },
+              { key: 'status', label: 'Status' },
+              { key: 'created', label: 'Created' }
+            ]}
+            tableClassName="super-admin-return-table"
+            itemLabel="return requests"
+            initialPageSize={10}
+            emptyText="No return requests found."
+            renderRow={(request, _index, key) => {
+              const customerName = request.customer_name || request.customer_detail?.full_name || request.user_detail?.full_name || request.customer_email || 'Customer';
+              const orderLabel = request.order_number || request.order_id || request.order || 'Not linked';
+              return (
+                <tr key={key}>
+                  <td><strong>#{request.id || 'return'}</strong></td>
+                  <td>{customerName}</td>
+                  <td>{orderLabel}</td>
+                  <td>{request.reason || request.message || 'No reason provided'}</td>
+                  <td>
+                    <span className={`status-pill status-${String(request.status || 'pending').toLowerCase()}`}>
+                      {formatOrderStatus(request.status)}
+                    </span>
+                  </td>
+                  <td>{formatDate(request.created_at || request.created)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {returnRequests.length ? returnRequests.map((request) => {
-                  const customerName = request.customer_name || request.customer_detail?.full_name || request.user_detail?.full_name || request.customer_email || 'Customer';
-                  const orderLabel = request.order_number || request.order_id || request.order || 'Not linked';
-                  return (
-                    <tr key={request.id || `${orderLabel}-${request.created_at}`}>
-                      <td><strong>#{request.id || 'return'}</strong></td>
-                      <td>{customerName}</td>
-                      <td>{orderLabel}</td>
-                      <td>{request.reason || request.message || 'No reason provided'}</td>
-                      <td>
-                        <span className={`status-pill status-${String(request.status || 'pending').toLowerCase()}`}>
-                          {formatOrderStatus(request.status)}
-                        </span>
-                      </td>
-                      <td>{formatDate(request.created_at || request.created)}</td>
-                    </tr>
-                  );
-                }) : (
-                  <tr><td colSpan="6">No return requests found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              );
+            }}
+          />
         </div>
       </div>
     );
