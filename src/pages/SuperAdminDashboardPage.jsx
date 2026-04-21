@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import PaginatedCardList from '../components/common/PaginatedCardList';
+import PaginatedTable from '../components/common/PaginatedTable';
 import DashboardStatCard from '../components/dashboard/DashboardStatCard';
 import SectionTitle from '../components/common/SectionTitle';
 import {
