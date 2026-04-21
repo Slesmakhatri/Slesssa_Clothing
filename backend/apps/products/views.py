@@ -220,6 +220,69 @@ class ProductViewSet(viewsets.ViewSet):
         payload = dict(request.data)
         if "main_image" in request.FILES:
             payload["main_image"] = store_uploaded_file(request.FILES["main_image"], "products/main")
+
+        # Normalize incoming payload same as create
+        def _try_parse_json(val):
+            if not isinstance(val, str):
+                return val
+            s = val.strip()
+            if (s.startswith('{') and s.endswith('}')) or (s.startswith('[') and s.endswith(']')):
+                try:
+                    return json.loads(s)
+                except Exception:
+                    return val
+            return val
+
+        def _first_if_list(val):
+            if isinstance(val, (list, tuple)) and val:
+                return val[0]
+            return val
+
+        for key in list(payload.keys()):
+            try:
+                v = payload.get(key)
+                v = _first_if_list(v)
+                v = _try_parse_json(v)
+                if key in {'is_customizable', 'is_featured', 'is_new_arrival', 'is_active'}:
+                    if isinstance(v, str):
+                        lv = v.strip().lower()
+                        payload[key] = lv in {'true', '1', 'yes', 'on'}
+                    else:
+                        payload[key] = bool(v) if v is not None else False
+                    continue
+                if key in {'vendor', 'category', 'stock', 'popularity'}:
+                    try:
+                        payload[key] = int(v)
+                        continue
+                    except Exception:
+                        payload[key] = v
+                        continue
+                if key in {'price', 'discount_price', 'rating'}:
+                    try:
+                        payload[key] = float(v)
+                        continue
+                    except Exception:
+                        payload[key] = v
+                        continue
+                if key in {'sizes', 'colors', 'fabric_options', 'images', 'eco_badges'}:
+                    if isinstance(v, str):
+                        parsed = _try_parse_json(v)
+                        if isinstance(parsed, list):
+                            payload[key] = parsed
+                        else:
+                            payload[key] = [item.strip() for item in v.split(',') if item.strip()]
+                    else:
+                        payload[key] = v
+                    continue
+                if key in {'product_type', 'name', 'description', 'sustainability_guidance', 'customization_note', 'badge', 'slug'}:
+                    if v is None:
+                        payload[key] = ''
+                    else:
+                        payload[key] = str(v)
+                    continue
+                payload[key] = v
+            except Exception as exc:
+                print(f'DEBUG: normalization error for {key}: {exc}')
         serializer = ProductSerializer(data={**product, **payload}, partial=True)
         serializer.is_valid(raise_exception=True)
         category = get_category_by_id(serializer.validated_data["category"]) if "category" in serializer.validated_data else None
