@@ -28,34 +28,34 @@ function ApplyVendorPage() {
   }
 
   function validatePhone(phone) {
-    // allow digits, spaces, +, -, () and min 7 digits
+    // allow digits, spaces, +, -, () and require at least 10 digits
     const digits = String(phone || '').replace(/\D/g, '');
-    return digits.length >= 7 && digits.length <= 15;
+    return digits.length >= 10 && digits.length <= 15;
   }
 
   function validateForm() {
     const fieldErrors = {};
-    if (!form.full_name?.trim()) fieldErrors.full_name = 'Full name is required';
+    if (!form.full_name?.trim() || form.full_name.trim().length < 2) fieldErrors.full_name = 'Full name is required and must be at least 2 characters';
     if (!form.email?.trim()) fieldErrors.email = 'Email is required';
     else if (!validateEmail(form.email)) fieldErrors.email = 'Enter a valid email address';
     if (!form.phone?.trim()) fieldErrors.phone = 'Phone is required';
-    else if (!validatePhone(form.phone)) fieldErrors.phone = 'Phone number must be valid';
-    if (!form.business_name?.trim()) fieldErrors.business_name = 'Business / shop name is required';
-    if (!form.specialization?.trim()) fieldErrors.specialization = 'Specialization is required';
-    if (!form.location?.trim()) fieldErrors.location = 'Location is required';
-    if (!form.business_description?.trim()) fieldErrors.business_description = 'Business description is required';
+    else if (!validatePhone(form.phone)) fieldErrors.phone = 'Phone number must be at least 10 digits';
+    if (!form.business_name?.trim() || form.business_name.trim().length < 2) fieldErrors.business_name = 'Business / shop name is required and must be at least 2 characters';
+    if (!form.specialization?.trim() || form.specialization.trim().length < 2) fieldErrors.specialization = 'Specialization is required and must be at least 2 characters';
+    if (!form.location?.trim() || form.location.trim().length < 2) fieldErrors.location = 'Location is required and must be at least 2 characters';
+    if (!form.business_description?.trim() || form.business_description.trim().length < 10) fieldErrors.business_description = 'Business description is required and must be at least 10 characters';
 
-    setErrors(fieldErrors);
-    return Object.keys(fieldErrors).length === 0;
+    return fieldErrors;
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setStatus('');
     // client-side validation
-    if (!validateForm()) {
-      // do not submit
-      console.debug('Vendor application validation failed', errors);
+    const fieldErrors = validateForm();
+    if (Object.keys(fieldErrors).length) {
+      setErrors(fieldErrors);
+      console.debug('Vendor application validation failed', fieldErrors);
       return;
     }
 
